@@ -4,14 +4,26 @@ import "./WalkInRentalOrders.css";
 
 import { getAllRentals } from "../../services/rentalApi";
 
+// NOTE: same services WalkInOrders uses. The path starts with
+// ../../ because this file is one folder shallower than
+// WalkInOrders (which uses ../../../). Adjust if yours differs.
+import { getAllBranches } from "../../services/branchService";
+import { getEmployees } from "../../services/userService";
 
-// =====================================================
-// CUSTOMER SOURCE LABELS
+// NEW: used to fill the "Laptop / product" dropdown with
+// products whose productType is RENTAL
+import { getProducts } from "../../services/productService";
+
+
+// ======================================================
+// CUSTOMER SOURCE
 // "How did you come to know about ZAID Infotech?"
-// key = value saved in database, label = shown in table
-// =====================================================
+//
+// KEY   -> saved in the database (never change a key later)
+// LABEL -> shown to the user / used in reports
+// ======================================================
 
-const CUSTOMER_SOURCE_LABELS = {
+const CUSTOMER_SOURCES = {
     GOOGLE: "Google Search / Google Maps",
     INSTAGRAM_FACEBOOK: "Instagram / Facebook",
     YOUTUBE: "YouTube",
@@ -25,16 +37,266 @@ const CUSTOMER_SOURCE_LABELS = {
 };
 
 
+// =====================================================
+// FILTER DEFAULTS
+// =====================================================
+
+const EMPTY_FILTERS = {
+    search: "",
+    dateFrom: "",
+    dateTo: "",
+    branch: "",
+    salesperson: "",
+    product: "",
+    status: "",
+    depositStatus: "",
+    customerType: "",
+    source: "",
+};
+
+// Statuses that are always listed in the Status dropdown,
+// plus any other status already present on the rentals
+const KNOWN_STATUSES = [
+    "PENDING",
+    "DOCUMENT_VERIFICATION",
+    "APPROVED",
+    "DEPOSIT_PENDING",
+    "READY_FOR_ALLOCATION",
+    "ACTIVE",
+    "RETURN_REQUESTED",
+    "SETTLEMENT_PENDING",
+    "RETURNED",
+    "COMPLETED",
+    "REJECTED",
+    "CANCELLED",
+];
+
+const DEPOSIT_STATUSES = ["PAID", "PARTIAL", "UNPAID"];
+
+const CUSTOMER_TYPES = ["INDIVIDUAL", "COMPANY"];
+
+
+// =====================================================
+// SMALL HELPERS (outside the component)
+// =====================================================
+
+const firstText = (...values) => {
+    const found = values.find(
+        (v) =>
+            v !== undefined &&
+            v !== null &&
+            typeof v !== "object" &&
+            String(v).trim() !== ""
+    );
+
+    return found ? String(found).trim() : "";
+};
+
+const getPersonName = (person) => {
+    if (!person || typeof person !== "object") {
+        return "";
+    }
+
+    return firstText(
+        person.name,
+        [person.firstName, person.lastName]
+            .filter(Boolean)
+            .join(" "),
+        person.email
+    );
+};
+
+// Role text of an employee. Handles a string ("SALES"),
+// an object ({ name: "Sales" }) or an array of either.
+// NOTE: if your employee role is stored under a different
+// field, add it to the list below.
+const getRoleText = (person) => {
+    if (!person || typeof person !== "object") {
+        return "";
+    }
+
+    const raw =
+        person.role ??
+        person.roles ??
+        person.userRole ??
+        person.designation;
+
+    return (Array.isArray(raw) ? raw : [raw])
+        .map((r) =>
+            r && typeof r === "object"
+                ? firstText(r.name, r.title, r.role)
+                : String(r || "")
+        )
+        .join(" ")
+        .toLowerCase();
+};
+
+// True for roles like SALES, SALESPERSON, SALES_EXECUTIVE
+const isSalesPerson = (person) =>
+    getRoleText(person).includes("sales");
+
+// NEW: True only for products saved with productType RENTAL
+// (and not soft-deleted)
+const isRentalProduct = (product) =>
+    String(product?.productType || "")
+        .trim()
+        .toUpperCase() === "RENTAL" &&
+    !product?.isDeleted;
+
+// Local date as YYYY-MM-DD (avoids the UTC shift of toISOString)
+const toDateKey = (value) => {
+    const d = new Date(value);
+
+    if (Number.isNaN(d.getTime())) {
+        return "";
+    }
+
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+
+    return `${d.getFullYear()}-${month}-${day}`;
+};
+
+const uniqueSorted = (list) =>
+    [...new Set(list.filter(Boolean))].sort((a, b) =>
+        a.localeCompare(b)
+    );
+
+// Pull a list out of many possible API response shapes
+const extractList = (response, ...keys) => {
+    if (Array.isArray(response)) return response;
+
+    for (const key of keys) {
+        if (Array.isArray(response?.[key])) return response[key];
+        if (Array.isArray(response?.data?.[key])) return response.data[key];
+    }
+
+    if (Array.isArray(response?.data)) return response.data;
+    if (Array.isArray(response?.data?.data)) return response.data.data;
+
+    return [];
+};
+
+// A field can be a populated object OR just an id string.
+// Object -> read the name from it. String id -> find it in `list`.
+const refName = (ref, list, getName) => {
+    if (!ref) return "";
+
+    if (typeof ref === "object") return getName(ref);
+
+    const found = list.find(
+        (item) => String(item?._id) === String(ref)
+    );
+
+    return found ? getName(found) : "";
+};
+
+const pretty = (value) =>
+    String(value || "")
+        .replace(/_/g, " ")
+        .toLowerCase()
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+
+
+// =====================================================
+// SORTABLE HEADER
+// Defined OUTSIDE the main component so React does not
+// remount it on every render.
+// =====================================================
+
+function SortableTh({ label, sortKey, sort, onSort }) {
+    const active = sort.key === sortKey;
+
+    return (
+        <th
+            className="sortable"
+            onClick={() => onSort(sortKey)}
+            aria-sort={
+                active
+                    ? sort.direction === "asc"
+                        ? "ascending"
+                        : "descending"
+                    : "none"
+            }
+        >
+            {label}
+            <span
+                className={`sort-arrow ${active ? "active" : ""}`}
+            >
+                {active
+                    ? sort.direction === "asc"
+                        ? " ▲"
+                        : " ▼"
+                    : " ↕"}
+            </span>
+        </th>
+    );
+}
+
+
 function WalkInRentalOrders() {
     const navigate = useNavigate();
 
     const [rentals, setRentals] = useState([]);
+
+    // Full lists from the branches / employees / products APIs
+    const [branchList, setBranchList] = useState([]);
+    const [employeeList, setEmployeeList] = useState([]);
+
+    // NEW: products from the products API (filtered to RENTAL later)
+    const [productList, setProductList] = useState([]);
+
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
-    const [search, setSearch] = useState("");
-    const [selectedDate, setSelectedDate] = useState("");
-    const [statusFilter, setStatusFilter] = useState("ALL");
+    // =====================================================
+    // FILTER + SORT STATE
+    // =====================================================
+
+    const [filters, setFilters] = useState(EMPTY_FILTERS);
+
+    const [sort, setSort] = useState({
+        key: "date",
+        direction: "desc",
+    });
+
+    const setFilter = (name, value) => {
+        setFilters((prev) => ({
+            ...prev,
+            [name]: value,
+        }));
+    };
+
+    const clearFilters = () => {
+        setFilters(EMPTY_FILTERS);
+    };
+
+    const NUMERIC_OR_DATE_SORTS = [
+        "date",
+        "monthlyRent",
+        "deposit",
+        "depositPaid",
+        "total",
+    ];
+
+    const toggleSort = (key) => {
+        setSort((prev) =>
+            prev.key === key
+                ? {
+                    key,
+                    direction:
+                        prev.direction === "asc"
+                            ? "desc"
+                            : "asc",
+                }
+                : {
+                    key,
+                    direction: NUMERIC_OR_DATE_SORTS.includes(key)
+                        ? "desc"
+                        : "asc",
+                }
+        );
+    };
 
     // =====================================================
     // LOAD RENTALS
@@ -42,20 +304,59 @@ function WalkInRentalOrders() {
 
     useEffect(() => {
         loadWalkInRentals();
+        loadBranches();
+        loadEmployees();
+        loadProducts();
     }, []);
+
+    // Same API Branch Management / WalkInOrders uses.
+    // Not fatal if it fails: dropdown falls back to rentals.
+    const loadBranches = async () => {
+        try {
+            const res = await getAllBranches();
+
+            setBranchList(
+                extractList(res, "branches").filter(
+                    (b) =>
+                        !b?.isDeleted &&
+                        String(b?.status || "ACTIVE").toUpperCase() === "ACTIVE"
+                )
+            );
+        } catch (err) {
+            console.error("LOAD BRANCHES ERROR:", err);
+        }
+    };
+
+    // Role-protected route: a 403 just means we fall back to rentals.
+    const loadEmployees = async () => {
+        try {
+            const res = await getEmployees();
+
+            setEmployeeList(extractList(res, "employees", "users"));
+        } catch (err) {
+            console.error("LOAD EMPLOYEES ERROR:", err);
+        }
+    };
+
+    // NEW: loads products for the "Laptop / product" dropdown.
+    // Not fatal if it fails: dropdown falls back to the product
+    // names found on the loaded rentals (old behaviour).
+    const loadProducts = async () => {
+        try {
+            const res = await getProducts();
+
+            setProductList(extractList(res, "products", "items"));
+        } catch (err) {
+            console.error("LOAD PRODUCTS ERROR:", err);
+        }
+    };
 
     const loadWalkInRentals = async () => {
         try {
             setLoading(true);
             setError("");
 
-            console.log("================================");
-            console.log("LOADING WALK-IN RENTALS");
-            console.log("================================");
-
             const response = await getAllRentals();
-
-            console.log("ALL RENTALS RESPONSE:", response);
 
             let list = [];
 
@@ -79,8 +380,6 @@ function WalkInRentalOrders() {
                 list = response.data.result;
             }
 
-            console.log("ALL RENTALS:", list);
-
             // ---------------------------------------------
             // ONLY WALK-IN RENTALS
             // ---------------------------------------------
@@ -93,17 +392,9 @@ function WalkInRentalOrders() {
                 );
             });
 
-            console.log(
-                "ONLY WALK-IN RENTALS:",
-                walkInRentals
-            );
-
             setRentals(walkInRentals);
         } catch (err) {
-            console.error(
-                "WALK-IN RENTALS ERROR:",
-                err
-            );
+            console.error("WALK-IN RENTALS ERROR:", err);
 
             setError(
                 err?.response?.data?.message ||
@@ -139,6 +430,16 @@ function WalkInRentalOrders() {
             rental?.customer?.fullName ||
             "Walk-In Customer"
         );
+    };
+
+    // =====================================================
+    // CUSTOMER TYPE (INDIVIDUAL / COMPANY)
+    // =====================================================
+
+    const getCustomerType = (rental) => {
+        return String(
+            rental?.customerType || "INDIVIDUAL"
+        ).toUpperCase();
     };
 
     // =====================================================
@@ -186,6 +487,69 @@ function WalkInRentalOrders() {
     };
 
     // =====================================================
+    // BRANCH
+    //
+    // NOTE: field names are best guesses (same as the
+    // Walk-In Orders page). If your rental object uses
+    // different names, change ONLY this function.
+    // =====================================================
+
+    const getBranch = (rental) => {
+        const byName = (b) => firstText(b?.name);
+
+        return (
+            refName(rental?.branchId, branchList, byName) ||
+            refName(rental?.branch, branchList, byName) ||
+            firstText(rental?.branchName)
+        );
+    };
+
+    // =====================================================
+    // SALESPERSON
+    //
+    // NOTE: best guesses. Change ONLY this function if your
+    // rental stores the staff member under another field.
+    // =====================================================
+
+    const getSalesperson = (rental) => {
+        const candidates = [
+            rental?.soldBy,
+            rental?.salesperson,
+            rental?.salesPerson,
+            rental?.createdBy,
+            rental?.handledBy,
+            rental?.staff,
+            rental?.employee,
+        ];
+
+        for (const ref of candidates) {
+            const name = refName(ref, employeeList, getPersonName);
+
+            if (name) return name;
+        }
+
+        return firstText(rental?.salespersonName);
+    };
+
+    // =====================================================
+    // SERIAL NUMBER (of the allocated laptop)
+    //
+    // NOTE: best guesses. Change ONLY this function if your
+    // rental stores the serial number somewhere else.
+    // =====================================================
+
+    const getSerialNumber = (rental) => {
+        return firstText(
+            rental?.serialNumber,
+            rental?.assignedSerialNumber,
+            rental?.laptopSerialNumber,
+            rental?.assignedAsset?.serialNumber,
+            rental?.inventoryItem?.serialNumber,
+            rental?.rentalProduct?.serialNumber
+        );
+    };
+
+    // =====================================================
     // CUSTOMER SOURCE
     // "How did the customer come to know about us?"
     //
@@ -209,7 +573,7 @@ function WalkInRentalOrders() {
         }
 
         const label =
-            CUSTOMER_SOURCE_LABELS[key] ||
+            CUSTOMER_SOURCES[key] ||
             key;
 
         const detail =
@@ -445,10 +809,7 @@ function WalkInRentalOrders() {
             1
         );
 
-        // ---------------------------------------------
         // DAILY RENT
-        // ---------------------------------------------
-
         if (type === "DAYS") {
             return (
                 (monthlyRent / 30) *
@@ -456,10 +817,7 @@ function WalkInRentalOrders() {
             );
         }
 
-        // ---------------------------------------------
         // MONTHLY RENT
-        // ---------------------------------------------
-
         return (
             monthlyRent *
             duration
@@ -524,23 +882,11 @@ function WalkInRentalOrders() {
                 return "completed";
 
             case "PENDING":
-                return "pending";
-
             case "DOCUMENT_VERIFICATION":
-                return "pending";
-
             case "APPROVED":
-                return "pending";
-
             case "DEPOSIT_PENDING":
-                return "pending";
-
             case "READY_FOR_ALLOCATION":
-                return "pending";
-
             case "RETURN_REQUESTED":
-                return "pending";
-
             case "SETTLEMENT_PENDING":
                 return "pending";
 
@@ -590,117 +936,217 @@ function WalkInRentalOrders() {
     };
 
     // =====================================================
-    // FILTER RENTALS
+    // DROPDOWN OPTIONS
+    // Built from the rentals that were loaded
+    // =====================================================
+
+    const options = useMemo(() => {
+        // NEW: names of products whose productType is RENTAL
+        const rentalProductNames = uniqueSorted(
+            productList
+                .filter(isRentalProduct)
+                .map((p) => firstText(p?.name))
+        );
+
+        return {
+            // Branches API + branches seen on rentals
+            branches: uniqueSorted([
+                ...branchList.map((b) => firstText(b?.name)),
+                ...rentals.map(getBranch),
+            ]),
+
+            // Only employees who have the sales role
+            salespersons: uniqueSorted(
+                employeeList
+                    .filter(isSalesPerson)
+                    .map(getPersonName)
+            ),
+
+            // CHANGED: only RENTAL type products.
+            // If the products API gave no rental products (failed
+            // or none exist), fall back to the old behaviour so the
+            // dropdown is never empty when rentals exist.
+            products:
+                rentalProductNames.length > 0
+                    ? rentalProductNames
+                    : uniqueSorted(rentals.map(getProductName)),
+
+            // Known statuses + any other status found on the rentals
+            statuses: uniqueSorted([
+                ...KNOWN_STATUSES,
+                ...rentals.map(getStatus),
+            ]),
+
+            // All client-defined sources (in the client's order),
+            // plus any unknown source value already saved on a rental
+            sources: [
+                ...Object.values(CUSTOMER_SOURCES),
+                ...uniqueSorted(
+                    rentals
+                        .map((rental) => getCustomerSource(rental).label)
+                        .filter(
+                            (label) =>
+                                !Object.values(CUSTOMER_SOURCES).includes(label)
+                        )
+                ),
+            ],
+        };
+    }, [rentals, branchList, employeeList, productList]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // =====================================================
+    // SORT VALUES
+    // =====================================================
+
+    const getSortValue = (rental, key) => {
+        switch (key) {
+            case "number":
+                return String(
+                    getRentalNumber(rental)
+                ).toLowerCase();
+
+            case "customer":
+                return getCustomerName(rental).toLowerCase();
+
+            case "branch":
+                return getBranch(rental).toLowerCase();
+
+            case "salesperson":
+                return getSalesperson(rental).toLowerCase();
+
+            case "product":
+                return getProductName(rental).toLowerCase();
+
+            case "monthlyRent":
+                return getMonthlyRent(rental);
+
+            case "deposit":
+                return getSecurityDeposit(rental);
+
+            case "depositPaid":
+                return getDepositAmountPaid(rental);
+
+            case "total":
+                return getTotalWithGST(rental);
+
+            case "status":
+                return getStatus(rental);
+
+            case "date":
+            default:
+                return (
+                    new Date(rental?.createdAt).getTime() || 0
+                );
+        }
+    };
+
+    // =====================================================
+    // FILTER + SORT (one place, always combined)
     // =====================================================
 
     const filteredRentals = useMemo(() => {
-        let result = [...rentals];
+        const keyword = filters.search.trim().toLowerCase();
 
-        // ---------------------------------------------
-        // SEARCH
-        // ---------------------------------------------
+        const result = rentals.filter((rental) => {
+            // ---- search ----
+            if (keyword) {
+                const source = getCustomerSource(rental);
 
-        if (search.trim()) {
-            const keyword =
-                search.trim().toLowerCase();
+                const haystack = [
+                    getRentalId(rental),
+                    getRentalNumber(rental),
+                    getCustomerName(rental),
+                    getCustomerPhone(rental),
+                    getCustomerEmail(rental),
+                    getProductName(rental),
+                    getBrandName(rental),
+                    getSerialNumber(rental),
+                    getBranch(rental),
+                    getSalesperson(rental),
+                    getStatus(rental),
+                    source.label,
+                    source.detail,
+                ]
+                    .filter(Boolean)
+                    .join(" ")
+                    .toLowerCase();
 
-            result = result.filter((rental) => {
-                const rentalId =
-                    String(
-                        getRentalId(rental)
-                    ).toLowerCase();
+                if (!haystack.includes(keyword)) {
+                    return false;
+                }
+            }
 
-                const rentalNumber =
-                    String(
-                        getRentalNumber(rental)
-                    ).toLowerCase();
+            // ---- date range ----
+            if (filters.dateFrom || filters.dateTo) {
+                const key = toDateKey(rental?.createdAt);
 
-                const customer =
-                    getCustomerName(
-                        rental
-                    ).toLowerCase();
+                if (!key) return false;
 
-                const phone =
-                    getCustomerPhone(
-                        rental
-                    ).toLowerCase();
-
-                const email =
-                    getCustomerEmail(
-                        rental
-                    ).toLowerCase();
-
-                const product =
-                    getProductName(
-                        rental
-                    ).toLowerCase();
-
-                const source =
-                    getCustomerSource(rental);
-
-                const sourceText =
-                    `${source.label} ${source.detail}`
-                        .toLowerCase();
-
-                return (
-                    rentalId.includes(keyword) ||
-                    rentalNumber.includes(keyword) ||
-                    customer.includes(keyword) ||
-                    phone.includes(keyword) ||
-                    email.includes(keyword) ||
-                    product.includes(keyword) ||
-                    sourceText.includes(keyword)
-                );
-            });
-        }
-
-        // ---------------------------------------------
-        // DATE
-        // ---------------------------------------------
-
-        if (selectedDate) {
-            result = result.filter((rental) => {
-                if (!rental?.createdAt) {
+                if (filters.dateFrom && key < filters.dateFrom) {
                     return false;
                 }
 
-                const rentalDate =
-                    new Date(
-                        rental.createdAt
-                    )
-                        .toISOString()
-                        .split("T")[0];
+                if (filters.dateTo && key > filters.dateTo) {
+                    return false;
+                }
+            }
 
-                return (
-                    rentalDate ===
-                    selectedDate
-                );
-            });
-        }
+            // ---- dropdowns ----
+            if (
+                filters.branch &&
+                getBranch(rental) !== filters.branch
+            ) return false;
 
-        // ---------------------------------------------
-        // STATUS
-        // ---------------------------------------------
+            if (
+                filters.salesperson &&
+                getSalesperson(rental) !== filters.salesperson
+            ) return false;
 
-        if (statusFilter !== "ALL") {
-            result = result.filter((rental) => {
-                return (
-                    getStatus(rental) ===
-                    statusFilter
-                );
-            });
-        }
+            if (
+                filters.product &&
+                getProductName(rental) !== filters.product
+            ) return false;
 
-        return result;
-    }, [
-        rentals,
-        search,
-        selectedDate,
-        statusFilter,
-    ]);
+            if (
+                filters.status &&
+                getStatus(rental) !== filters.status
+            ) return false;
+
+            if (
+                filters.depositStatus &&
+                getDepositPaymentStatus(rental) !== filters.depositStatus
+            ) return false;
+
+            if (
+                filters.customerType &&
+                getCustomerType(rental) !== filters.customerType
+            ) return false;
+
+            if (
+                filters.source &&
+                getCustomerSource(rental).label !== filters.source
+            ) return false;
+
+            return true;
+        });
+
+        // ---- sort ----
+        const factor = sort.direction === "asc" ? 1 : -1;
+
+        return [...result].sort((a, b) => {
+            const va = getSortValue(a, sort.key);
+            const vb = getSortValue(b, sort.key);
+
+            if (va < vb) return -1 * factor;
+            if (va > vb) return 1 * factor;
+
+            return 0;
+        });
+    }, [rentals, branchList, employeeList, filters, sort]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
     // =====================================================
-    // SUMMARY
+    // SUMMARY (follows the filtered list)
     // =====================================================
 
     const totalRent =
@@ -814,11 +1260,6 @@ function WalkInRentalOrders() {
             return;
         }
 
-        console.log(
-            "Opening rental return page:",
-            rentalId
-        );
-
         navigate(
             `/receptionist-dashboard/rental/orders/${rentalId}/return`,
             {
@@ -828,6 +1269,8 @@ function WalkInRentalOrders() {
             }
         );
     };
+
+    const COLUMN_COUNT = 15;
 
     // =====================================================
     // RENDER
@@ -855,9 +1298,7 @@ function WalkInRentalOrders() {
 
                 <button
                     className="new-rental-btn"
-                    onClick={
-                        createNewRental
-                    }
+                    onClick={createNewRental}
                 >
                     + New Walk-In Rental
                 </button>
@@ -878,93 +1319,186 @@ function WalkInRentalOrders() {
                 FILTERS
             ========================================== */}
 
-            <div className="rental-filter-section">
+            <div className="rental-filter-panel">
 
-                <input
-                    type="text"
-                    placeholder="Search customer / phone / rental number / laptop / source"
-                    value={search}
-                    onChange={(e) =>
-                        setSearch(
-                            e.target.value
-                        )
-                    }
-                />
+                <div className="rental-filter-search-row">
 
-                <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) =>
-                        setSelectedDate(
-                            e.target.value
-                        )
-                    }
-                />
+                    <input
+                        type="text"
+                        className="rental-filter-search"
+                        placeholder="Search customer, phone, rental number, laptop, serial number, salesperson, source"
+                        value={filters.search}
+                        onChange={(e) =>
+                            setFilter("search", e.target.value)
+                        }
+                    />
 
-                <select
-                    value={statusFilter}
-                    onChange={(e) =>
-                        setStatusFilter(
-                            e.target.value
-                        )
-                    }
-                >
-                    <option value="ALL">
-                        All Status
-                    </option>
+                    <button
+                        type="button"
+                        className="rental-clear-btn"
+                        onClick={clearFilters}
+                        disabled={activeFilterCount === 0}
+                    >
+                        Clear filters
+                        {activeFilterCount > 0 &&
+                            ` (${activeFilterCount})`}
+                    </button>
 
-                    <option value="ACTIVE">
-                        Active
-                    </option>
+                    <button
+                        type="button"
+                        className="refresh-btn"
+                        onClick={loadWalkInRentals}
+                        disabled={loading}
+                    >
+                        {loading
+                            ? "Loading..."
+                            : "Refresh"}
+                    </button>
 
-                    <option value="PENDING">
-                        Pending
-                    </option>
+                </div>
 
-                    <option value="DOCUMENT_VERIFICATION">
-                        Document Verification
-                    </option>
+                <div className="rental-filter-grid">
 
-                    <option value="DEPOSIT_PENDING">
-                        Deposit Pending
-                    </option>
+                    <label className="rental-filter-field">
+                        <span>From date</span>
+                        <input
+                            type="date"
+                            value={filters.dateFrom}
+                            max={filters.dateTo || undefined}
+                            onChange={(e) =>
+                                setFilter("dateFrom", e.target.value)
+                            }
+                        />
+                    </label>
 
-                    <option value="RETURN_REQUESTED">
-                        Return Requested
-                    </option>
+                    <label className="rental-filter-field">
+                        <span>To date</span>
+                        <input
+                            type="date"
+                            value={filters.dateTo}
+                            min={filters.dateFrom || undefined}
+                            onChange={(e) =>
+                                setFilter("dateTo", e.target.value)
+                            }
+                        />
+                    </label>
 
-                    <option value="SETTLEMENT_PENDING">
-                        Settlement Pending
-                    </option>
+                    <label className="rental-filter-field">
+                        <span>Branch</span>
+                        <select
+                            value={filters.branch}
+                            onChange={(e) =>
+                                setFilter("branch", e.target.value)
+                            }
+                        >
+                            <option value="">All branches</option>
+                            {options.branches.map((b) => (
+                                <option key={b} value={b}>{b}</option>
+                            ))}
+                        </select>
+                    </label>
 
-                    <option value="RETURNED">
-                        Returned
-                    </option>
+                    <label className="rental-filter-field">
+                        <span>Salesperson</span>
+                        <select
+                            value={filters.salesperson}
+                            onChange={(e) =>
+                                setFilter("salesperson", e.target.value)
+                            }
+                        >
+                            <option value="">All salespersons</option>
+                            {options.salespersons.map((s) => (
+                                <option key={s} value={s}>{s}</option>
+                            ))}
+                        </select>
+                    </label>
 
-                    <option value="COMPLETED">
-                        Completed
-                    </option>
+                    <label className="rental-filter-field">
+                        <span>Laptop / product</span>
+                        <select
+                            value={filters.product}
+                            onChange={(e) =>
+                                setFilter("product", e.target.value)
+                            }
+                        >
+                            <option value="">All laptops</option>
+                            {options.products.map((p) => (
+                                <option key={p} value={p}>{p}</option>
+                            ))}
+                        </select>
+                    </label>
 
-                    <option value="REJECTED">
-                        Rejected
-                    </option>
+                    <label className="rental-filter-field">
+                        <span>Rental status</span>
+                        <select
+                            value={filters.status}
+                            onChange={(e) =>
+                                setFilter("status", e.target.value)
+                            }
+                        >
+                            <option value="">All statuses</option>
+                            {options.statuses.map((s) => (
+                                <option key={s} value={s}>
+                                    {pretty(s)}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
 
-                    <option value="CANCELLED">
-                        Cancelled
-                    </option>
-                </select>
+                    <label className="rental-filter-field">
+                        <span>Deposit payment</span>
+                        <select
+                            value={filters.depositStatus}
+                            onChange={(e) =>
+                                setFilter("depositStatus", e.target.value)
+                            }
+                        >
+                            <option value="">All deposits</option>
+                            {DEPOSIT_STATUSES.map((s) => (
+                                <option key={s} value={s}>
+                                    {pretty(s)}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
 
-                <button
-                    className="refresh-btn"
-                    onClick={
-                        loadWalkInRentals
-                    }
-                    disabled={loading}
-                >
-                    {loading
-                        ? "Loading..."
-                        : "Refresh"}
-                </button>
+                    <label className="rental-filter-field">
+                        <span>Customer type</span>
+                        <select
+                            value={filters.customerType}
+                            onChange={(e) =>
+                                setFilter("customerType", e.target.value)
+                            }
+                        >
+                            <option value="">All types</option>
+                            {CUSTOMER_TYPES.map((t) => (
+                                <option key={t} value={t}>
+                                    {pretty(t)}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+
+                    <label className="rental-filter-field">
+                        <span>Customer source</span>
+                        <select
+                            value={filters.source}
+                            onChange={(e) =>
+                                setFilter("source", e.target.value)
+                            }
+                        >
+                            <option value="">All sources</option>
+                            {options.sources.map((s) => (
+                                <option key={s} value={s}>{s}</option>
+                            ))}
+                        </select>
+                    </label>
+
+                </div>
+
+                <div className="rental-result-count">
+                    Showing {filteredRentals.length} of {rentals.length} rentals
+                </div>
 
             </div>
 
@@ -974,85 +1508,29 @@ function WalkInRentalOrders() {
 
             <div className="rental-summary-box">
 
-                {/* TOTAL RENTALS */}
-
                 <div className="rental-summary-card">
-
-                    <h3>
-                        {
-                            filteredRentals.length
-                        }
-                    </h3>
-
-                    <p>
-                        Total Rentals
-                    </p>
-
+                    <h3>{filteredRentals.length}</h3>
+                    <p>Total Rentals</p>
                 </div>
 
-                {/* ACTIVE */}
-
                 <div className="rental-summary-card">
-
-                    <h3>
-                        {activeRentals}
-                    </h3>
-
-                    <p>
-                        Active Rentals
-                    </p>
-
+                    <h3>{activeRentals}</h3>
+                    <p>Active Rentals</p>
                 </div>
 
-                {/* RENT */}
-
                 <div className="rental-summary-card">
-
-                    <h3>
-                        ₹{" "}
-                        {formatMoney(
-                            totalRent
-                        )}
-                    </h3>
-
-                    <p>
-                        Rental Amount + GST
-                    </p>
-
+                    <h3>₹ {formatMoney(totalRent)}</h3>
+                    <p>Rental Amount + GST</p>
                 </div>
 
-                {/* EXPECTED DEPOSIT */}
-
                 <div className="rental-summary-card">
-
-                    <h3>
-                        ₹{" "}
-                        {formatMoney(
-                            totalDeposit
-                        )}
-                    </h3>
-
-                    <p>
-                        Security Deposit
-                    </p>
-
+                    <h3>₹ {formatMoney(totalDeposit)}</h3>
+                    <p>Security Deposit</p>
                 </div>
 
-                {/* ACTUAL DEPOSIT PAID */}
-
                 <div className="rental-summary-card">
-
-                    <h3>
-                        ₹{" "}
-                        {formatMoney(
-                            totalDepositPaid
-                        )}
-                    </h3>
-
-                    <p>
-                        Deposit Collected
-                    </p>
-
+                    <h3>₹ {formatMoney(totalDepositPaid)}</h3>
+                    <p>Deposit Collected</p>
                 </div>
 
             </div>
@@ -1069,57 +1547,90 @@ function WalkInRentalOrders() {
 
                         <tr>
 
-                            <th>
-                                Rental ID
-                            </th>
+                            <SortableTh
+                                label="Rental ID"
+                                sortKey="number"
+                                sort={sort}
+                                onSort={toggleSort}
+                            />
 
-                            <th>
-                                Date
-                            </th>
+                            <SortableTh
+                                label="Date"
+                                sortKey="date"
+                                sort={sort}
+                                onSort={toggleSort}
+                            />
 
-                            <th>
-                                Customer
-                            </th>
+                            <SortableTh
+                                label="Customer"
+                                sortKey="customer"
+                                sort={sort}
+                                onSort={toggleSort}
+                            />
 
-                            <th>
-                                Phone
-                            </th>
+                            <th>Phone</th>
 
-                            <th>
-                                Customer Source
-                            </th>
+                            <SortableTh
+                                label="Branch"
+                                sortKey="branch"
+                                sort={sort}
+                                onSort={toggleSort}
+                            />
 
-                            <th>
-                                Laptop
-                            </th>
+                            <SortableTh
+                                label="Salesperson"
+                                sortKey="salesperson"
+                                sort={sort}
+                                onSort={toggleSort}
+                            />
 
-                            <th>
-                                Duration
-                            </th>
+                            <th>Customer Source</th>
 
-                            <th>
-                                Monthly Rent
-                            </th>
+                            <SortableTh
+                                label="Laptop"
+                                sortKey="product"
+                                sort={sort}
+                                onSort={toggleSort}
+                            />
 
-                            <th>
-                                Deposit
-                            </th>
+                            <th>Duration</th>
 
-                            <th>
-                                Deposit Paid
-                            </th>
+                            <SortableTh
+                                label="Monthly Rent"
+                                sortKey="monthlyRent"
+                                sort={sort}
+                                onSort={toggleSort}
+                            />
 
-                            <th>
-                                Total
-                            </th>
+                            <SortableTh
+                                label="Deposit"
+                                sortKey="deposit"
+                                sort={sort}
+                                onSort={toggleSort}
+                            />
 
-                            <th>
-                                Status
-                            </th>
+                            <SortableTh
+                                label="Deposit Paid"
+                                sortKey="depositPaid"
+                                sort={sort}
+                                onSort={toggleSort}
+                            />
 
-                            <th>
-                                Action
-                            </th>
+                            <SortableTh
+                                label="Total"
+                                sortKey="total"
+                                sort={sort}
+                                onSort={toggleSort}
+                            />
+
+                            <SortableTh
+                                label="Status"
+                                sortKey="status"
+                                sort={sort}
+                                onSort={toggleSort}
+                            />
+
+                            <th>Action</th>
 
                         </tr>
 
@@ -1130,399 +1641,237 @@ function WalkInRentalOrders() {
                         {loading ? (
 
                             <tr>
-
                                 <td
-                                    colSpan="13"
+                                    colSpan={COLUMN_COUNT}
                                     className="table-message"
                                 >
-                                    Loading Walk-In
-                                    Rentals...
+                                    Loading Walk-In Rentals...
                                 </td>
-
                             </tr>
 
                         ) : filteredRentals.length === 0 ? (
 
                             <tr>
-
                                 <td
-                                    colSpan="13"
+                                    colSpan={COLUMN_COUNT}
                                     className="table-message"
                                 >
-                                    No Walk-In Rental
-                                    Orders Found
+                                    {rentals.length === 0
+                                        ? "No Walk-In Rental Orders Found"
+                                        : "No rentals match these filters. Try clearing some filters."}
                                 </td>
-
                             </tr>
 
                         ) : (
 
-                            filteredRentals.map(
-                                (rental) => {
+                            filteredRentals.map((rental) => {
 
-                                    const rentalId =
-                                        getRentalId(
-                                            rental
-                                        );
+                                const rentalId = getRentalId(rental);
 
-                                    const status =
-                                        getStatus(
-                                            rental
-                                        );
+                                const status = getStatus(rental);
 
-                                    const duration =
-                                        getRentalDuration(
-                                            rental
-                                        );
+                                const duration = getRentalDuration(rental);
 
-                                    const deposit =
-                                        getSecurityDeposit(
-                                            rental
-                                        );
+                                const deposit = getSecurityDeposit(rental);
 
-                                    const depositPaid =
-                                        getDepositAmountPaid(
-                                            rental
-                                        );
+                                const depositPaid = getDepositAmountPaid(rental);
 
-                                    const depositStatus =
-                                        getDepositPaymentStatus(
-                                            rental
-                                        );
+                                const depositStatus = getDepositPaymentStatus(rental);
 
-                                    const source =
-                                        getCustomerSource(
-                                            rental
-                                        );
+                                const source = getCustomerSource(rental);
 
-                                    return (
-                                        <tr
-                                            key={
-                                                rentalId
-                                            }
-                                        >
+                                const branch = getBranch(rental);
 
-                                            {/* =================================
-                                                RENTAL NUMBER
-                                            ================================== */}
+                                const salesperson = getSalesperson(rental);
 
-                                            <td>
+                                const serial = getSerialNumber(rental);
 
+                                return (
+                                    <tr key={rentalId}>
+
+                                        {/* RENTAL NUMBER */}
+
+                                        <td>
+                                            <strong>
+                                                #
+                                                {String(
+                                                    getRentalNumber(rental)
+                                                ).slice(-12)}
+                                            </strong>
+                                        </td>
+
+                                        {/* DATE */}
+
+                                        <td>
+                                            {rental?.createdAt
+                                                ? new Date(
+                                                    rental.createdAt
+                                                ).toLocaleDateString("en-IN")
+                                                : "-"}
+                                        </td>
+
+                                        {/* CUSTOMER */}
+
+                                        <td>
+                                            <div className="customer-cell">
                                                 <strong>
-                                                    #
-                                                    {
-                                                        String(
-                                                            getRentalNumber(
-                                                                rental
-                                                            )
-                                                        ).slice(
-                                                            -12
-                                                        )
-                                                    }
+                                                    {getCustomerName(rental)}
                                                 </strong>
 
-                                            </td>
+                                                <small>
+                                                    {getCustomerType(rental)}
+                                                </small>
+                                            </div>
+                                        </td>
 
-                                            {/* =================================
-                                                DATE
-                                            ================================== */}
+                                        {/* PHONE */}
 
-                                            <td>
+                                        <td>{getCustomerPhone(rental)}</td>
 
-                                                {rental?.createdAt
-                                                    ? new Date(
-                                                        rental.createdAt
-                                                    ).toLocaleDateString(
-                                                        "en-IN"
-                                                    )
-                                                    : "-"}
+                                        {/* BRANCH */}
 
-                                            </td>
+                                        <td>
+                                            {branch || (
+                                                <span className="source-empty">-</span>
+                                            )}
+                                        </td>
 
-                                            {/* =================================
-                                                CUSTOMER
-                                            ================================== */}
+                                        {/* SALESPERSON */}
 
-                                            <td>
+                                        <td>
+                                            {salesperson || (
+                                                <span className="source-empty">-</span>
+                                            )}
+                                        </td>
 
-                                                <div className="customer-cell">
+                                        {/* CUSTOMER SOURCE */}
 
-                                                    <strong>
-                                                        {
-                                                            getCustomerName(
-                                                                rental
-                                                            )
-                                                        }
-                                                    </strong>
+                                        <td>
+                                            {source.label ? (
+                                                <div className="source-cell">
+                                                    <span className="source-badge">
+                                                        {source.label}
+                                                    </span>
 
+                                                    {source.detail && (
+                                                        <small>{source.detail}</small>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <span className="source-empty">-</span>
+                                            )}
+                                        </td>
+
+                                        {/* PRODUCT */}
+
+                                        <td>
+                                            <div className="product-cell">
+                                                <strong>
+                                                    {getProductName(rental)}
+                                                </strong>
+
+                                                {getBrandName(rental) && (
                                                     <small>
-                                                        {
-                                                            rental?.customerType ||
-                                                            "INDIVIDUAL"
-                                                        }
+                                                        {getBrandName(rental)}
                                                     </small>
-
-                                                </div>
-
-                                            </td>
-
-                                            {/* =================================
-                                                PHONE
-                                            ================================== */}
-
-                                            <td>
-
-                                                {
-                                                    getCustomerPhone(
-                                                        rental
-                                                    )
-                                                }
-
-                                            </td>
-
-                                            {/* =================================
-                                                CUSTOMER SOURCE
-                                            ================================== */}
-
-                                            <td>
-
-                                                {source.label ? (
-
-                                                    <div className="source-cell">
-
-                                                        <span className="source-badge">
-                                                            {
-                                                                source.label
-                                                            }
-                                                        </span>
-
-                                                        {source.detail && (
-
-                                                            <small>
-                                                                {
-                                                                    source.detail
-                                                                }
-                                                            </small>
-
-                                                        )}
-
-                                                    </div>
-
-                                                ) : (
-
-                                                    <span className="source-empty">
-                                                        -
-                                                    </span>
-
                                                 )}
 
-                                            </td>
-
-                                            {/* =================================
-                                                PRODUCT
-                                            ================================== */}
-
-                                            <td>
-
-                                                <div className="product-cell">
-
-                                                    <strong>
-                                                        {
-                                                            getProductName(
-                                                                rental
-                                                            )
-                                                        }
-                                                    </strong>
-
-                                                    {getBrandName(
-                                                        rental
-                                                    ) && (
-
-                                                        <small>
-                                                            {
-                                                                getBrandName(
-                                                                    rental
-                                                                )
-                                                            }
-                                                        </small>
-
-                                                    )}
-
-                                                </div>
-
-                                            </td>
-
-                                            {/* =================================
-                                                DURATION
-                                            ================================== */}
-
-                                            <td>
-
-                                                {duration.value}{" "}
-                                                {
-                                                    duration.type
-                                                }
-
-                                            </td>
-
-                                            {/* =================================
-                                                MONTHLY RENT
-                                            ================================== */}
-
-                                            <td>
-
-                                                ₹{" "}
-                                                {formatMoney(
-                                                    getMonthlyRent(
-                                                        rental
-                                                    )
+                                                {serial && (
+                                                    <small>S/N: {serial}</small>
                                                 )}
+                                            </div>
+                                        </td>
 
-                                            </td>
+                                        {/* DURATION */}
 
-                                            {/* =================================
-                                                SECURITY DEPOSIT
-                                            ================================== */}
+                                        <td>
+                                            {duration.value} {duration.type}
+                                        </td>
 
-                                            <td>
+                                        {/* MONTHLY RENT */}
 
-                                                ₹{" "}
-                                                {formatMoney(
-                                                    deposit
-                                                )}
+                                        <td>
+                                            ₹ {formatMoney(getMonthlyRent(rental))}
+                                        </td>
 
-                                            </td>
+                                        {/* SECURITY DEPOSIT */}
 
-                                            {/* =================================
-                                                DEPOSIT PAID
-                                            ================================== */}
+                                        <td>₹ {formatMoney(deposit)}</td>
 
-                                            <td>
+                                        {/* DEPOSIT PAID */}
 
-                                                <div className="deposit-cell">
-
-                                                    <strong>
-                                                        ₹{" "}
-                                                        {
-                                                            formatMoney(
-                                                                depositPaid
-                                                            )
-                                                        }
-                                                    </strong>
-
-                                                    <span
-                                                        className={
-                                                            `deposit-status ${getDepositStatusClass(
-                                                                depositStatus
-                                                            )}`
-                                                        }
-                                                    >
-                                                        {
-                                                            depositStatus
-                                                        }
-                                                    </span>
-
-                                                </div>
-
-                                            </td>
-
-                                            {/* =================================
-                                                TOTAL
-                                            ================================== */}
-
-                                            <td>
-
+                                        <td>
+                                            <div className="deposit-cell">
                                                 <strong>
-                                                    ₹{" "}
-                                                    {formatMoney(
-                                                        getTotalWithGST(
-                                                            rental
-                                                        )
-                                                    )}
+                                                    ₹ {formatMoney(depositPaid)}
                                                 </strong>
-
-                                            </td>
-
-                                            {/* =================================
-                                                STATUS
-                                            ================================== */}
-
-                                            <td>
 
                                                 <span
-                                                    className={
-                                                        `rental-status ${getStatusClass(
-                                                            status
-                                                        )}`
-                                                    }
+                                                    className={`deposit-status ${getDepositStatusClass(
+                                                        depositStatus
+                                                    )}`}
                                                 >
-                                                    {
-                                                        status
-                                                    }
+                                                    {depositStatus}
                                                 </span>
+                                            </div>
+                                        </td>
 
-                                            </td>
+                                        {/* TOTAL */}
 
-                                            {/* =================================
-                                                ACTION
-                                            ================================== */}
+                                        <td>
+                                            <strong>
+                                                ₹ {formatMoney(
+                                                    getTotalWithGST(rental)
+                                                )}
+                                            </strong>
+                                        </td>
 
-                                            <td>
+                                        {/* STATUS */}
 
-                                                <div className="rental-action-buttons">
+                                        <td>
+                                            <span
+                                                className={`rental-status ${getStatusClass(
+                                                    status
+                                                )}`}
+                                            >
+                                                {status}
+                                            </span>
+                                        </td>
 
-                                                    {/* VIEW */}
+                                        {/* ACTION */}
 
+                                        <td>
+                                            <div className="rental-action-buttons">
+
+                                                <button
+                                                    className="view-btn"
+                                                    onClick={() => viewRental(rental)}
+                                                >
+                                                    View
+                                                </button>
+
+                                                <button
+                                                    className="print-btn"
+                                                    onClick={() => printInvoice(rental)}
+                                                >
+                                                    Invoice
+                                                </button>
+
+                                                {status === "ACTIVE" && (
                                                     <button
-                                                        className="view-btn"
-                                                        onClick={() =>
-                                                            viewRental(
-                                                                rental
-                                                            )
-                                                        }
+                                                        className="return-btn"
+                                                        onClick={() => returnRental(rental)}
                                                     >
-                                                        View
+                                                        Return
                                                     </button>
+                                                )}
 
-                                                    {/* INVOICE */}
+                                            </div>
+                                        </td>
 
-                                                    <button
-                                                        className="print-btn"
-                                                        onClick={() =>
-                                                            printInvoice(
-                                                                rental
-                                                            )
-                                                        }
-                                                    >
-                                                        Invoice
-                                                    </button>
-
-                                                    {/* RETURN */}
-
-                                                    {status ===
-                                                        "ACTIVE" && (
-
-                                                        <button
-                                                            className="return-btn"
-                                                            onClick={() =>
-                                                                returnRental(
-                                                                    rental
-                                                                )
-                                                            }
-                                                        >
-                                                            Return
-                                                        </button>
-
-                                                    )}
-
-                                                </div>
-
-                                            </td>
-
-                                        </tr>
-                                    );
-                                }
-                            )
+                                    </tr>
+                                );
+                            })
 
                         )}
 

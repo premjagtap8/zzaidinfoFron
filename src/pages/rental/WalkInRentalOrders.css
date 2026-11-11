@@ -51,52 +51,128 @@
     color: #991b1b;
 }
 
-/* FILTER */
+/* =====================================================
+   FILTER PANEL
+===================================================== */
 
-.rental-filter-section {
-    display: grid;
-    grid-template-columns:
-        minmax(240px, 1fr)
-        180px
-        180px
-        100px;
-
-    gap: 12px;
+.rental-filter-panel {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 18px;
     margin-bottom: 24px;
 }
 
-.rental-filter-section input,
-.rental-filter-section select {
+.rental-filter-search-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.rental-filter-search {
+    flex: 1;
+    min-width: 260px;
     height: 44px;
     border: 1px solid #d1d5db;
     border-radius: 8px;
     background: white;
-    padding: 0 12px;
+    padding: 0 14px;
     outline: none;
     font-size: 14px;
+    box-sizing: border-box;
 }
 
-.rental-filter-section input:focus,
-.rental-filter-section select:focus {
+.rental-filter-search:focus {
     border-color: #111827;
 }
 
+.rental-clear-btn {
+    height: 44px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: white;
+    color: #374151;
+    padding: 0 18px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.rental-clear-btn:hover:not(:disabled) {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+}
+
+.rental-clear-btn:disabled {
+    color: #9ca3af;
+    cursor: not-allowed;
+}
+
 .refresh-btn {
+    height: 44px;
     border: none;
     border-radius: 8px;
     background: #374151;
     color: white;
+    padding: 0 20px;
     cursor: pointer;
     font-weight: 600;
+}
+
+.refresh-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.rental-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 14px;
+}
+
+.rental-filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.rental-filter-field span {
+    font-size: 13px;
+    color: #6b7280;
+    font-weight: 600;
+}
+
+.rental-filter-field input,
+.rental-filter-field select {
+    height: 42px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: white;
+    color: #111827;
+    padding: 0 12px;
+    outline: none;
+    font-size: 14px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.rental-filter-field input:focus,
+.rental-filter-field select:focus {
+    border-color: #111827;
+}
+
+.rental-result-count {
+    margin-top: 14px;
+    font-size: 14px;
+    color: #6b7280;
 }
 
 /* SUMMARY */
 
 .rental-summary-box {
     display: grid;
-    grid-template-columns:
-        repeat(4, 1fr);
-
+    grid-template-columns: repeat(5, 1fr);
     gap: 16px;
     margin-bottom: 24px;
 }
@@ -130,7 +206,7 @@
 
 .rental-orders-table {
     width: 100%;
-    min-width: 1450px;
+    min-width: 1750px;
     border-collapse: collapse;
 }
 
@@ -144,6 +220,28 @@
     white-space: nowrap;
 }
 
+/* sortable headers */
+
+.rental-orders-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.rental-orders-table th.sortable:hover {
+    background: #f3f4f6;
+    color: #111827;
+}
+
+.sort-arrow {
+    font-size: 11px;
+    opacity: 0.5;
+}
+
+.sort-arrow.active {
+    opacity: 1;
+    color: #111827;
+}
+
 .rental-orders-table td {
     padding: 14px;
     border-bottom: 1px solid #f1f1f1;
@@ -155,7 +253,7 @@
     background: #fafafa;
 }
 
-/* CUSTOMER */
+/* CUSTOMER + PRODUCT */
 
 .customer-cell,
 .product-cell {
@@ -170,7 +268,7 @@
     font-size: 12px;
 }
 
-/* STATUS */
+/* RENTAL STATUS */
 
 .rental-status {
     display: inline-flex;
@@ -178,9 +276,15 @@
     border-radius: 20px;
     font-size: 12px;
     font-weight: 700;
+    white-space: nowrap;
 }
 
 .rental-status.active {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.rental-status.completed {
     background: #dcfce7;
     color: #166534;
 }
@@ -243,100 +347,8 @@
     color: #6b7280;
 }
 
-/* RESPONSIVE */
-
-@media (max-width: 1000px) {
-
-    .rental-filter-section {
-        grid-template-columns:
-            1fr 1fr;
-    }
-
-    .rental-summary-box {
-        grid-template-columns:
-            repeat(2, 1fr);
-    }
-
-}
-
-@media (max-width: 600px) {
-
-    .walkin-rental-orders-page {
-        padding: 14px;
-    }
-
-    .rental-orders-header {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .rental-filter-section {
-        grid-template-columns: 1fr;
-    }
-
-    .rental-summary-box {
-        grid-template-columns: 1fr;
-    }
-
-}
 /* =====================================================
-   DEPOSIT CELL
-===================================================== */
-
-.deposit-cell {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    min-width: 90px;
-}
-
-.deposit-cell strong {
-    font-size: 14px;
-}
-
-/* =====================================================
-   DEPOSIT STATUS
-===================================================== */
-
-.deposit-status {
-    display: inline-flex;
-    width: fit-content;
-    padding: 3px 8px;
-    border-radius: 20px;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.4px;
-}
-
-/* PAID */
-
-.deposit-paid {
-    background: #dcfce7;
-    color: #166534;
-}
-
-/* PARTIAL */
-
-.deposit-partial {
-    background: #fef3c7;
-    color: #92400e;
-}
-
-/* UNPAID */
-
-.deposit-unpaid {
-    background: #fee2e2;
-    color: #991b1b;
-}
-
-/* COMPLETED RENTAL */
-
-.rental-status.completed {
-    background: #dcfce7;
-    color: #166534;
-}
-/* =====================================================
-   DEPOSIT STATUS
+   DEPOSIT CELL + STATUS
 ===================================================== */
 
 .deposit-cell {
@@ -366,23 +378,17 @@
     text-transform: uppercase;
 }
 
-/* PAID */
-
 .deposit-paid {
     background: #dcfce7;
     color: #166534;
     border: 1px solid #86efac;
 }
 
-/* PARTIAL */
-
 .deposit-partial {
     background: #fef3c7;
     color: #92400e;
     border: 1px solid #fcd34d;
 }
-
-/* UNPAID */
 
 .deposit-unpaid {
     background: #fee2e2;
@@ -426,4 +432,67 @@
 
 .source-empty {
     color: #9ca3af;
+}
+
+/* =====================================================
+   RESPONSIVE
+===================================================== */
+
+@media (max-width: 1200px) {
+
+    .rental-summary-box {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+}
+
+@media (max-width: 1000px) {
+
+    .rental-summary-box {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+}
+
+@media (max-width: 768px) {
+
+    .rental-filter-search-row {
+        flex-direction: column;
+    }
+
+    .rental-filter-search,
+    .rental-clear-btn,
+    .refresh-btn {
+        width: 100%;
+    }
+
+    .rental-filter-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+}
+
+@media (max-width: 600px) {
+
+    .walkin-rental-orders-page {
+        padding: 14px;
+    }
+
+    .rental-orders-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .rental-summary-box {
+        grid-template-columns: 1fr;
+    }
+
+}
+
+@media (max-width: 480px) {
+
+    .rental-filter-grid {
+        grid-template-columns: 1fr;
+    }
+
 }

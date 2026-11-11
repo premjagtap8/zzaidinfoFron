@@ -1018,6 +1018,8 @@ import {
   FiMapPin,
   FiChevronDown,
   FiChevronUp,
+  FiFilter,
+  FiX,
 } from "react-icons/fi";
 
 import { toast } from "react-toastify";
@@ -1029,6 +1031,8 @@ import TransferJobModal from "../../components/repair/TransferJobModal";
 
 import { WarrantyBadge } from "../../components/repair/JobExtraFields";
 
+import { getAllBranches } from "../../services/branchService";
+
 // ======================================================
 // API CONFIG
 // ======================================================
@@ -1038,7 +1042,6 @@ const API_URL = String(
 ).replace(/\/+$/, "");
 
 const BASE_URL = `${API_URL}/newRepair`;
-const BRANCH_URL = `${API_URL}/branches`;
 
 const STATUS_OPTIONS = [
   "Received",
@@ -1048,6 +1051,29 @@ const STATUS_OPTIONS = [
   "Completed",
   "Cancelled",
   "Delivered",
+];
+
+// Same device list as the New Repair Intake form
+const DEVICE_TYPE_OPTIONS = [
+  "Laptop",
+  "Desktop",
+  "Printer",
+  "Monitor",
+  "Other",
+];
+
+const SORT_OPTIONS = [
+  { value: "newest", label: "Job Date: Newest First" },
+  { value: "oldest", label: "Job Date: Oldest First" },
+  { value: "target", label: "Target Date: Nearest First" },
+  { value: "customer", label: "Customer: A to Z" },
+  { value: "status", label: "Status" },
+];
+
+const CLOSED_STATUSES = [
+  "completed",
+  "delivered",
+  "cancelled",
 ];
 
 // ======================================================
@@ -1126,6 +1152,105 @@ const normalizeStatus = (status) =>
 
 const getStatusClass = (status) =>
   `tat-status-${normalizeStatus(status).replace(/\s+/g, "-")}`;
+
+// ======================================================
+// FILTER HELPERS
+// ======================================================
+
+const toTime = (value) => {
+  if (!value) return null;
+
+  const time = new Date(value).getTime();
+
+  return Number.isNaN(time) ? null : time;
+};
+
+const getStartOfToday = () => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today.getTime();
+};
+
+const getJobDateValue = (job) =>
+  job?.jobDate || job?.createdAt || null;
+
+const getTargetDateValue = (job) =>
+  job?.estimatedCompletionDate || null;
+
+const getDeviceTypeValue = (job) =>
+  String(job?.deviceType || "").trim();
+
+/**
+ * Returns "in", "out" or "unknown".
+ * Reads the common warranty field names. If your repair
+ * record uses a different field, add it here (it should
+ * match what <WarrantyBadge /> reads).
+ */
+const getWarrantyState = (job) => {
+  const flag =
+    job?.inWarranty ??
+    job?.isInWarranty ??
+    job?.isUnderWarranty ??
+    job?.underWarranty;
+
+  if (typeof flag === "boolean") {
+    return flag ? "in" : "out";
+  }
+
+  if (typeof job?.warranty === "boolean") {
+    return job.warranty ? "in" : "out";
+  }
+
+  const text = String(
+    job?.warrantyStatus ||
+    job?.warrantyType ||
+    (typeof job?.warranty === "string"
+      ? job.warranty
+      : "") ||
+    ""
+  )
+    .trim()
+    .toLowerCase();
+
+  if (text) {
+    // Exact values used by the New Repair Intake form
+    if (text === "under warranty") return "in";
+    if (text === "out of warranty") return "out";
+    if (text === "not specified") return "unknown";
+
+    if (/(out|expired|void|no warranty|none)/.test(text)) {
+      return "out";
+    }
+
+    if (/(in warranty|under|active|valid|yes)/.test(text)) {
+      return "in";
+    }
+  }
+
+  const endTime = toTime(
+    job?.warrantyEndDate ||
+    job?.warrantyExpiryDate ||
+    job?.warrantyExpiry ||
+    job?.warranty?.endDate ||
+    job?.warranty?.expiryDate
+  );
+
+  if (endTime !== null) {
+    return endTime >= getStartOfToday() ? "in" : "out";
+  }
+
+  return "unknown";
+};
+
+const isOverdue = (job) => {
+  if (CLOSED_STATUSES.includes(normalizeStatus(job?.status))) {
+    return false;
+  }
+
+  const target = toTime(getTargetDateValue(job));
+
+  return target !== null && target < getStartOfToday();
+};
 
 // ======================================================
 // RESPONSE EXTRACTION HELPERS
@@ -1261,21 +1386,31 @@ export default function TechnicianAssignedTasks() {
   const [loading, setLoading] = useState(true);
   const [branchesLoading, setBranchesLoading] = useState(false);
 
+  // Search, filters and sort
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [branchFilter, setBranchFilter] = useState("ALL");
+  const [deviceTypeFilter, setDeviceTypeFilter] = useState("ALL");
+  const [warrantyFilter, setWarrantyFilter] = useState("ALL");
+  const [dateField, setDateField] = useState("job");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [sortBy, setSortBy] = useState("newest");
+  const [showFilters, setShowFilters] = useState(true);
 
   const [updatingId, setUpdatingId] = useState(null);
 
   // Expanded issue descriptions
   const [expandedIssues, setExpandedIssues] = useState({});
 
-  
   // Technician notes (draft text per job)
   const [notesDraft, setNotesDraft] = useState({});
   const [savingNotesId, setSavingNotesId] = useState(null);
 
   // Transfer job modal
   const [transferJob, setTransferJob] = useState(null);
+
   // ====================================================
   // LOGGED-IN USER
   // ====================================================
@@ -1317,14 +1452,9 @@ export default function TechnicianAssignedTasks() {
       ) {
         const populatedName = getBranchName(branchValue);
 
-        // If the branch is populated with its name,
-        // return it directly.
         if (populatedName) {
           return branchValue;
         }
-
-        // Sometimes branchId is an object containing
-        // only _id. Try finding the full branch below.
       }
 
       // Case 2: Branch ID stored as string or object
@@ -1343,7 +1473,6 @@ export default function TechnicianAssignedTasks() {
       }
 
       // Case 3: Branch object exists but is not fully populated.
-      // Return it as fallback so any available details show.
       if (
         typeof branchValue === "object" &&
         !Array.isArray(branchValue)
@@ -1417,10 +1546,7 @@ export default function TechnicianAssignedTasks() {
     try {
       setBranchesLoading(true);
 
-      const response = await axios.get(
-        BRANCH_URL,
-        getAuthConfig()
-      );
+      const response = await getAllBranches();
 
       const data = extractBranches(response.data);
 
@@ -1588,22 +1714,102 @@ export default function TechnicianAssignedTasks() {
   ]);
 
   // ====================================================
-  // SEARCH AND STATUS FILTER
+  // FILTER DROPDOWN OPTIONS (built from the technician's
+  // own jobs, so they work even if /branches is forbidden)
+  // ====================================================
+
+  const branchOptions = useMemo(() => {
+    const map = new Map();
+
+    // 1) Every branch returned by getAllBranches()
+    branches.forEach((branch) => {
+      const id = getId(branch);
+
+      if (!id || map.has(id)) return;
+
+      const name = getBranchName(branch);
+      const code = getBranchCode(branch);
+
+      map.set(
+        id,
+        name && code
+          ? `${name} (${code})`
+          : name || code || `Branch ID: ${id.slice(-6)}`
+      );
+    });
+
+    // 2) Any branch found on the technician's own jobs
+    //    (keeps the filter working if the branch list is empty)
+    myAssignedJobs.forEach((job) => {
+      const id = getId(getRepairBranchValue(job));
+
+      if (!id || map.has(id)) return;
+
+      map.set(id, getBranchLabel(job));
+    });
+
+    return Array.from(map, ([value, label]) => ({
+      value,
+      label,
+    })).sort((a, b) =>
+      a.label.localeCompare(b.label)
+    );
+  }, [branches, myAssignedJobs, getBranchLabel]);
+
+  const deviceTypeOptions = useMemo(() => {
+    // Always show the standard devices, in intake-form order
+    const base = DEVICE_TYPE_OPTIONS.map((label) => ({
+      value: label.toLowerCase(),
+      label,
+    }));
+
+    const known = new Set(base.map((option) => option.value));
+    const extras = new Map();
+
+    // Plus any other device type found on the jobs
+    myAssignedJobs.forEach((job) => {
+      const type = getDeviceTypeValue(job);
+
+      if (!type) return;
+
+      const key = type.toLowerCase();
+
+      if (!known.has(key) && !extras.has(key)) {
+        extras.set(key, type);
+      }
+    });
+
+    const extraOptions = Array.from(
+      extras,
+      ([value, label]) => ({ value, label })
+    ).sort((a, b) => a.label.localeCompare(b.label));
+
+    return [...base, ...extraOptions];
+  }, [myAssignedJobs]);
+
+  // ====================================================
+  // SEARCH, FILTERS AND SORT
   // ====================================================
 
   const filteredJobs = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
 
-    return myAssignedJobs.filter((job) => {
+    const fromTime = dateFrom
+      ? new Date(`${dateFrom}T00:00:00`).getTime()
+      : null;
+
+    const toTimeLimit = dateTo
+      ? new Date(`${dateTo}T23:59:59.999`).getTime()
+      : null;
+
+    const result = myAssignedJobs.filter((job) => {
       const model = String(
         job.deviceModel ||
         job.laptopModel ||
         ""
       );
 
-      const deviceType = String(
-        job.deviceType || ""
-      );
+      const deviceType = getDeviceTypeValue(job);
 
       const ticketNumber = String(
         job.repairNumber ||
@@ -1619,6 +1825,18 @@ export default function TechnicianAssignedTasks() {
         job.customerPhone || ""
       );
 
+      const customerEmail = String(
+        job.customerEmail || ""
+      );
+
+      const serialNumber = String(
+        job.serialNumber || ""
+      );
+
+      const deviceBrand = String(
+        job.deviceBrand || ""
+      );
+
       const branchName = getBranchLabel(job);
 
       const branch = getBranchDetails(job);
@@ -1627,11 +1845,16 @@ export default function TechnicianAssignedTasks() {
 
       const branchCode = getBranchCode(branch);
 
+      // ---------- Search ----------
+
       const matchesSearch =
         !query ||
         customerName.toLowerCase().includes(query) ||
         customerPhone.includes(query) ||
+        customerEmail.toLowerCase().includes(query) ||
         ticketNumber.toLowerCase().includes(query) ||
+        serialNumber.toLowerCase().includes(query) ||
+        deviceBrand.toLowerCase().includes(query) ||
         model.toLowerCase().includes(query) ||
         deviceType.toLowerCase().includes(query) ||
         String(job.issueDescription || "")
@@ -1640,24 +1863,192 @@ export default function TechnicianAssignedTasks() {
         String(job.remarks || "")
           .toLowerCase()
           .includes(query) ||
+        String(job.technicianNotes || "")
+          .toLowerCase()
+          .includes(query) ||
         branchName.toLowerCase().includes(query) ||
         branchAddress.toLowerCase().includes(query) ||
         branchCode.toLowerCase().includes(query);
 
-      const matchesStatus =
-        statusFilter === "ALL" ||
-        normalizeStatus(job.status) ===
-          normalizeStatus(statusFilter);
+      if (!matchesSearch) return false;
 
-      return matchesSearch && matchesStatus;
+      // ---------- Status ----------
+
+      if (
+        statusFilter !== "ALL" &&
+        normalizeStatus(job.status) !==
+          normalizeStatus(statusFilter)
+      ) {
+        return false;
+      }
+
+      // ---------- Branch ----------
+
+      if (
+        branchFilter !== "ALL" &&
+        getId(getRepairBranchValue(job)) !== branchFilter
+      ) {
+        return false;
+      }
+
+      // ---------- Device type ----------
+
+      if (
+        deviceTypeFilter !== "ALL" &&
+        deviceType.toLowerCase() !== deviceTypeFilter
+      ) {
+        return false;
+      }
+
+      // ---------- Warranty ----------
+
+      if (
+        warrantyFilter !== "ALL" &&
+        getWarrantyState(job) !== warrantyFilter
+      ) {
+        return false;
+      }
+
+      // ---------- Overdue ----------
+
+      if (overdueOnly && !isOverdue(job)) {
+        return false;
+      }
+
+      // ---------- Date range ----------
+
+      if (fromTime !== null || toTimeLimit !== null) {
+        const jobTime = toTime(
+          dateField === "target"
+            ? getTargetDateValue(job)
+            : getJobDateValue(job)
+        );
+
+        if (jobTime === null) return false;
+
+        if (fromTime !== null && jobTime < fromTime) {
+          return false;
+        }
+
+        if (
+          toTimeLimit !== null &&
+          jobTime > toTimeLimit
+        ) {
+          return false;
+        }
+      }
+
+      return true;
     });
+
+    // ---------- Sort ----------
+
+    const sorted = [...result];
+
+    const byDate = (getter, direction) => (a, b) => {
+      const timeA = toTime(getter(a));
+      const timeB = toTime(getter(b));
+
+      // Records without a date always go last
+      if (timeA === null && timeB === null) return 0;
+      if (timeA === null) return 1;
+      if (timeB === null) return -1;
+
+      return direction === "asc"
+        ? timeA - timeB
+        : timeB - timeA;
+    };
+
+    switch (sortBy) {
+      case "oldest":
+        sorted.sort(byDate(getJobDateValue, "asc"));
+        break;
+
+      case "target":
+        sorted.sort(byDate(getTargetDateValue, "asc"));
+        break;
+
+      case "customer":
+        sorted.sort((a, b) =>
+          String(a.customerName || "").localeCompare(
+            String(b.customerName || ""),
+            undefined,
+            { sensitivity: "base" }
+          )
+        );
+        break;
+
+      case "status":
+        sorted.sort((a, b) => {
+          const indexA = STATUS_OPTIONS.findIndex(
+            (status) =>
+              normalizeStatus(status) ===
+              normalizeStatus(a.status)
+          );
+
+          const indexB = STATUS_OPTIONS.findIndex(
+            (status) =>
+              normalizeStatus(status) ===
+              normalizeStatus(b.status)
+          );
+
+          return indexA - indexB;
+        });
+        break;
+
+      case "newest":
+      default:
+        sorted.sort(byDate(getJobDateValue, "desc"));
+        break;
+    }
+
+    return sorted;
   }, [
     myAssignedJobs,
     searchTerm,
     statusFilter,
+    branchFilter,
+    deviceTypeFilter,
+    warrantyFilter,
+    overdueOnly,
+    dateField,
+    dateFrom,
+    dateTo,
+    sortBy,
     getBranchLabel,
     getBranchDetails,
   ]);
+
+  // ====================================================
+  // ACTIVE FILTER COUNT + CLEAR
+  // ====================================================
+
+  const activeFilterCount = [
+    statusFilter !== "ALL",
+    branchFilter !== "ALL",
+    deviceTypeFilter !== "ALL",
+    warrantyFilter !== "ALL",
+    overdueOnly,
+    Boolean(dateFrom || dateTo),
+  ].filter(Boolean).length;
+
+  const hasActiveFilters =
+    activeFilterCount > 0 ||
+    searchTerm.trim() !== "" ||
+    sortBy !== "newest";
+
+  const clearAllFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("ALL");
+    setBranchFilter("ALL");
+    setDeviceTypeFilter("ALL");
+    setWarrantyFilter("ALL");
+    setDateField("job");
+    setDateFrom("");
+    setDateTo("");
+    setOverdueOnly(false);
+    setSortBy("newest");
+  };
 
   // ====================================================
   // ISSUE MORE / LESS
@@ -1758,6 +2149,7 @@ export default function TechnicianAssignedTasks() {
       setUpdatingId(null);
     }
   };
+
   // ====================================================
   // TECHNICIAN NOTES
   // ====================================================
@@ -1814,6 +2206,7 @@ export default function TechnicianAssignedTasks() {
 
     await fetchAssignedRepairs();
   };
+
   // ====================================================
   // SUMMARY COUNTS
   // ====================================================
@@ -1943,6 +2336,8 @@ export default function TechnicianAssignedTasks() {
 
       <section className="tat-card">
 
+        {/* TOOLBAR: SEARCH + STATUS + SORT + FILTER TOGGLE */}
+
         <div className="tat-toolbar">
 
           <div className="tat-search-wrap">
@@ -1950,7 +2345,7 @@ export default function TechnicianAssignedTasks() {
 
             <input
               type="text"
-              placeholder="Search customer, phone, device, ticket, branch..."
+              placeholder="Search customer, phone, serial no., device, ticket, branch..."
               value={searchTerm}
               onChange={(event) =>
                 setSearchTerm(event.target.value)
@@ -1958,30 +2353,259 @@ export default function TechnicianAssignedTasks() {
             />
           </div>
 
-          <div className="tat-filter-wrap">
-            <select
-              value={statusFilter}
-              onChange={(event) =>
-                setStatusFilter(event.target.value)
-              }
-              className="tat-select"
-            >
-              <option value="ALL">
-                All Statuses
-              </option>
+          <div className="tat-toolbar-actions">
 
-              {STATUS_OPTIONS.map((status) => (
-                <option
-                  key={status}
-                  value={status}
-                >
-                  {status}
+            <div className="tat-filter-wrap">
+              <select
+                value={statusFilter}
+                onChange={(event) =>
+                  setStatusFilter(event.target.value)
+                }
+                className="tat-select"
+                aria-label="Filter by status"
+              >
+                <option value="ALL">
+                  All Statuses
                 </option>
-              ))}
-            </select>
+
+                {STATUS_OPTIONS.map((status) => (
+                  <option
+                    key={status}
+                    value={status}
+                  >
+                    {status}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="tat-filter-wrap tat-sort-wrap">
+              <select
+                value={sortBy}
+                onChange={(event) =>
+                  setSortBy(event.target.value)
+                }
+                className="tat-select"
+                aria-label="Sort tasks"
+              >
+                {SORT_OPTIONS.map((option) => (
+                  <option
+                    key={option.value}
+                    value={option.value}
+                  >
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              type="button"
+              className={`tat-btn-filter ${
+                showFilters ? "is-open" : ""
+              }`}
+              onClick={() =>
+                setShowFilters((previous) => !previous)
+              }
+              aria-expanded={showFilters}
+            >
+              <FiFilter />
+
+              <span>Filters</span>
+
+              {activeFilterCount > 0 && (
+                <span className="tat-filter-badge">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+
           </div>
 
         </div>
+
+        {/* ADVANCED FILTER PANEL */}
+
+        {showFilters && (
+          <div className="tat-filter-panel">
+
+            <div className="tat-filter-field">
+              <label htmlFor="tat-f-branch">
+                Branch
+              </label>
+
+              <select
+                id="tat-f-branch"
+                className="tat-select"
+                value={branchFilter}
+                onChange={(event) =>
+                  setBranchFilter(event.target.value)
+                }
+              >
+                <option value="ALL">
+                  All Branches
+                </option>
+
+                {branchOptions.map((option) => (
+                  <option
+                    key={option.value}
+                    value={option.value}
+                  >
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="tat-filter-field">
+              <label htmlFor="tat-f-device">
+                Device / Product
+              </label>
+
+              <select
+                id="tat-f-device"
+                className="tat-select"
+                value={deviceTypeFilter}
+                onChange={(event) =>
+                  setDeviceTypeFilter(event.target.value)
+                }
+              >
+                <option value="ALL">
+                  All Devices
+                </option>
+
+                {deviceTypeOptions.map((option) => (
+                  <option
+                    key={option.value}
+                    value={option.value}
+                  >
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="tat-filter-field">
+              <label htmlFor="tat-f-warranty">
+                Warranty
+              </label>
+
+              <select
+                id="tat-f-warranty"
+                className="tat-select"
+                value={warrantyFilter}
+                onChange={(event) =>
+                  setWarrantyFilter(event.target.value)
+                }
+              >
+                <option value="ALL">
+                  All
+                </option>
+
+                <option value="in">
+                  Under Warranty
+                </option>
+
+                <option value="out">
+                  Out of Warranty
+                </option>
+
+                <option value="unknown">
+                  Not Specified
+                </option>
+              </select>
+            </div>
+
+            <div className="tat-filter-field">
+              <label htmlFor="tat-f-datefield">
+                Date Type
+              </label>
+
+              <select
+                id="tat-f-datefield"
+                className="tat-select"
+                value={dateField}
+                onChange={(event) =>
+                  setDateField(event.target.value)
+                }
+              >
+                <option value="job">
+                  Job Date
+                </option>
+
+                <option value="target">
+                  Est. Target Date
+                </option>
+              </select>
+            </div>
+
+            <div className="tat-filter-field">
+              <label htmlFor="tat-f-from">
+                From
+              </label>
+
+              <input
+                id="tat-f-from"
+                type="date"
+                className="tat-select"
+                value={dateFrom}
+                max={dateTo || undefined}
+                onChange={(event) =>
+                  setDateFrom(event.target.value)
+                }
+              />
+            </div>
+
+            <div className="tat-filter-field">
+              <label htmlFor="tat-f-to">
+                To
+              </label>
+
+              <input
+                id="tat-f-to"
+                type="date"
+                className="tat-select"
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={(event) =>
+                  setDateTo(event.target.value)
+                }
+              />
+            </div>
+
+            <div className="tat-filter-field tat-filter-check">
+              <label
+                htmlFor="tat-f-overdue"
+                className="tat-check-label"
+              >
+                <input
+                  id="tat-f-overdue"
+                  type="checkbox"
+                  checked={overdueOnly}
+                  onChange={(event) =>
+                    setOverdueOnly(event.target.checked)
+                  }
+                />
+
+                <span>Overdue only</span>
+              </label>
+            </div>
+
+            <div className="tat-filter-field tat-filter-clear">
+              <button
+                type="button"
+                className="tat-btn-clear"
+                onClick={clearAllFilters}
+                disabled={!hasActiveFilters}
+              >
+                <FiX />
+
+                <span>Clear Filters</span>
+              </button>
+            </div>
+
+          </div>
+        )}
 
         {loading ? (
           <div className="tat-state-box">
@@ -2003,6 +2627,18 @@ export default function TechnicianAssignedTasks() {
               There are currently no repair tickets assigned
               to your profile, or no tickets match your filters.
             </p>
+
+            {hasActiveFilters && (
+              <button
+                type="button"
+                className="tat-btn-clear tat-btn-clear-inline"
+                onClick={clearAllFilters}
+              >
+                <FiX />
+
+                <span>Clear Filters</span>
+              </button>
+            )}
           </div>
         ) : (
           <div className="tat-table-wrap">
@@ -2135,7 +2771,6 @@ export default function TechnicianAssignedTasks() {
                             </span>
                           )}
 
-                          
                           <span className="tat-sub-txt">
                             <WarrantyBadge repair={job} />
                           </span>
@@ -2258,7 +2893,7 @@ export default function TechnicianAssignedTasks() {
                         )}
                       </td>
 
-                                            {/* TECHNICIAN NOTES */}
+                      {/* TECHNICIAN NOTES */}
 
                       <td style={{ minWidth: 230 }}>
                         <textarea
@@ -2319,6 +2954,12 @@ export default function TechnicianAssignedTasks() {
                             job.estimatedCompletionDate
                           )}
                         </span>
+
+                        {isOverdue(job) && (
+                          <span className="tat-overdue-tag">
+                            Overdue
+                          </span>
+                        )}
                       </td>
 
                       {/* STATUS */}
@@ -2368,7 +3009,7 @@ export default function TechnicianAssignedTasks() {
                             Updating...
                           </span>
                         )}
-                        
+
                         <button
                           type="button"
                           className="rjx-btn rjx-btn-outline rjx-btn-sm"
@@ -2388,7 +3029,7 @@ export default function TechnicianAssignedTasks() {
           </div>
         )}
 
-               <div className="tat-table-footer">
+        <div className="tat-table-footer">
           Showing {filteredJobs.length} of{" "}
           {myAssignedJobs.length} assigned tasks
         </div>

@@ -999,3 +999,21 @@
     background: #ffffff !important;
   }
 }
+
+
+/* Hide the old "select or type" salesperson input from JobExtraFields.
+   The new dropdown (.rc-sales-select-field) replaces it. */
+.rc-warranty-sales .rc-input-field:not(.rc-sales-select-field):has([name="salespersonName"]),
+.rc-warranty-sales :not(.rc-sales-select-field) > input[name="salespersonName"] {
+  display: none !important;
+}
+
+.rc-sales-select-field {
+  max-width: 100%;
+}
+
+
+
+ .rc-warranty-sales div:has(> input[placeholder*="salesperson" i]) {
+     display: none !important;
+   }

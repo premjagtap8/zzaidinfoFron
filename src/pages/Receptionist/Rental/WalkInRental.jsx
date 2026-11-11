@@ -24,6 +24,8 @@ import {
   FaUniversity,
   FaTrashAlt,
   FaShoppingCart,
+  FaCodeBranch,
+  FaUserTie,
 } from "react-icons/fa";
 
 import {
@@ -34,6 +36,7 @@ import {
 } from "../../../services/rentalApi";
 
 import { createPayment } from "../../../services/paymentService";
+import { getAllBranches } from "../../../services/branchService";
 import "./WalkInRental.css";
 
 // ======================================================
@@ -180,6 +183,42 @@ const firstArray = (response) =>
     response?.data?.data,
     response?.data?.data?.products,
   ].find(Array.isArray) || [];
+
+// Branch list can come back in several shapes depending on the
+// axios interceptor / backend response format.
+const branchList = (response) =>
+  [
+    response,
+    response?.data,
+    response?.branches,
+    response?.data?.branches,
+    response?.data?.data,
+    response?.data?.data?.branches,
+  ].find(Array.isArray) || [];
+
+const branchIdOf = (branch) =>
+  String(branch?._id || branch?.id || "");
+
+const branchNameOf = (branch) =>
+  branch?.name ||
+  branch?.branchName ||
+  branch?.title ||
+  "Unnamed Branch";
+
+// Reads the logged-in user saved in localStorage ("user" key).
+const readLoggedInUser = () => {
+  try {
+    const raw = localStorage.getItem("user");
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch (error) {
+    console.error("LOCALSTORAGE USER PARSE ERROR", error);
+    return null;
+  }
+};
 
 const productObject = (item) =>
   (item?.productId && typeof item.productId === "object"
@@ -494,6 +533,53 @@ function WalkInRental() {
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState([]);
 
+  // ----------------------------------------------------
+  // SALESPERSON (logged-in user from localStorage)
+  // ----------------------------------------------------
+  const salesperson = useMemo(() => {
+    const user = readLoggedInUser();
+
+    if (!user) return null;
+
+    const id = String(user.id || user._id || "");
+
+    const fullName =
+      [user.firstName, user.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim() ||
+      user.name ||
+      user.fullName ||
+      user.email ||
+      "";
+
+    return {
+      id,
+      name: fullName,
+      email: user.email || "",
+      phone: user.phone || "",
+      // If the user record already carries a branch, use it as default
+      branchId: String(
+        (typeof user.branchId === "object"
+          ? user.branchId?._id || user.branchId?.id
+          : user.branchId) ||
+          (typeof user.branch === "object"
+            ? user.branch?._id || user.branch?.id
+            : user.branch) ||
+          ""
+      ),
+    };
+  }, []);
+
+  // ----------------------------------------------------
+  // BRANCH
+  // ----------------------------------------------------
+  const [branches, setBranches] = useState([]);
+  const [branchesLoading, setBranchesLoading] = useState(true);
+  const [branchId, setBranchId] = useState(
+    salesperson?.branchId || ""
+  );
+
   const [customerType, setCustomerType] =
     useState("INDIVIDUAL");
 
@@ -598,6 +684,64 @@ function WalkInRental() {
   const effectiveGstPercentage = isNonGst
     ? 0
     : Number(gstPercentage);
+
+  // ====================================================
+  // LOAD BRANCHES
+  // ====================================================
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBranches = async () => {
+      try {
+        setBranchesLoading(true);
+
+        const response = await getAllBranches();
+        const list = branchList(response).filter(
+          (b) => branchIdOf(b)
+        );
+
+        if (cancelled) return;
+
+        setBranches(list);
+
+        setBranchId((current) => {
+          // keep a valid existing choice
+          if (
+            current &&
+            list.some((b) => branchIdOf(b) === current)
+          ) {
+            return current;
+          }
+
+          // only one branch -> select it automatically
+          if (list.length === 1) {
+            return branchIdOf(list[0]);
+          }
+
+          return "";
+        });
+      } catch (error) {
+        console.error("LOAD BRANCHES ERROR", error);
+
+        if (!cancelled) {
+          toast.error(
+            error?.response?.data?.message ||
+              error?.message ||
+              "Failed to load branches"
+          );
+        }
+      } finally {
+        if (!cancelled) setBranchesLoading(false);
+      }
+    };
+
+    loadBranches();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // ====================================================
   // LOAD PRODUCTS
@@ -800,6 +944,8 @@ function WalkInRental() {
     }
   };
 
+  // NOTE: branch is intentionally NOT reset here. The receptionist
+  // works from one branch, so it should stay selected between rentals.
   const resetForm = () => {
     setCart([]);
     setSearch("");
@@ -1070,6 +1216,18 @@ function WalkInRental() {
   // ====================================================
 
   const validateForm = () => {
+    if (!salesperson?.id) {
+      toast.error(
+        "Logged-in user not found. Please log in again."
+      );
+      return false;
+    }
+
+    if (!branchId) {
+      toast.error("Please select a branch.");
+      return false;
+    }
+
     if (!cart.length) {
       toast.error("Please select a rental laptop.");
       return false;
@@ -1299,6 +1457,12 @@ function WalkInRental() {
         rentalSource: "WALK_IN",
         customerType,
 
+        // BRANCH + SALESPERSON
+        // branchId  -> selected in the dropdown
+        // soldBy    -> logged-in user (from localStorage)
+        branchId,
+        soldBy: salesperson.id,
+
         items: cart.map((c) => {
           const p = pricing.items.find(
             (i) =>
@@ -1458,7 +1622,7 @@ function WalkInRental() {
       }
 
       // ================================================
-      // VERIFY BACKEND TAX / PRICING
+      // VERIFY BACKEND TAX / PRICING / BRANCH
       // ================================================
 
       for (const rental of rentals) {
@@ -1482,6 +1646,23 @@ function WalkInRental() {
         ) {
           toast.error(
             `Rental ${rental.rentalNumber || ""}: backend saved GST despite NON_GST selection. Please correct backend before collecting payment.`
+          );
+        }
+
+        // Warn if backend ignored branch / salesperson
+        const savedBranch =
+          rental.branchId && typeof rental.branchId === "object"
+            ? rental.branchId._id || rental.branchId.id
+            : rental.branchId;
+
+        const savedSoldBy =
+          rental.soldBy && typeof rental.soldBy === "object"
+            ? rental.soldBy._id || rental.soldBy.id
+            : rental.soldBy;
+
+        if (!savedBranch || !savedSoldBy) {
+          console.warn(
+            `Rental ${rental.rentalNumber || ""}: branchId / soldBy not returned by backend.`
           );
         }
       }
@@ -1744,6 +1925,94 @@ function WalkInRental() {
         className="wir-form"
         onSubmit={handleSubmit}
       >
+        {/* BRANCH + SALESPERSON */}
+
+        <section className="wir-card wir-branch-section">
+          <div className="wir-section-title">
+            <FaCodeBranch />
+
+            <div>
+              <h2>Branch & Salesperson</h2>
+              <p>
+                Select the branch for this rental. The
+                salesperson is the logged-in user.
+              </p>
+            </div>
+          </div>
+
+          <div className="wir-form-grid">
+            <div className="wir-form-group">
+              <label htmlFor="wirBranch">Branch *</label>
+
+              <div className="wir-input-icon">
+                <FaBuilding />
+
+                <select
+                  id="wirBranch"
+                  value={branchId}
+                  onChange={(e) =>
+                    setBranchId(e.target.value)
+                  }
+                  disabled={branchesLoading}
+                >
+                  <option value="">
+                    {branchesLoading
+                      ? "Loading branches..."
+                      : "Select branch"}
+                  </option>
+
+                  {branches.map((branch) => (
+                    <option
+                      key={branchIdOf(branch)}
+                      value={branchIdOf(branch)}
+                    >
+                      {branchNameOf(branch)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {!branchesLoading && !branches.length && (
+                <small className="wir-field-error">
+                  No branches found. Please add a branch
+                  first.
+                </small>
+              )}
+            </div>
+
+            <div className="wir-form-group">
+              <label htmlFor="wirSalesperson">
+                Salesperson
+              </label>
+
+              <div className="wir-input-icon wir-input-readonly">
+                <FaUserTie />
+
+                <input
+                  id="wirSalesperson"
+                  type="text"
+                  readOnly
+                  value={
+                    salesperson?.name ||
+                    "Not logged in"
+                  }
+                />
+              </div>
+
+              {salesperson?.email ? (
+                <small>{salesperson.email}</small>
+              ) : (
+                !salesperson && (
+                  <small className="wir-field-error">
+                    User details not found. Please log in
+                    again.
+                  </small>
+                )
+              )}
+            </div>
+          </div>
+        </section>
+
         {/* CUSTOMER TYPE */}
 
         <section className="wir-card wir-customer-type-section">
@@ -3306,6 +3575,29 @@ function WalkInRental() {
               </div>
 
               <div className="wir-summary-lines">
+                <div>
+                  <span>Branch</span>
+
+                  <strong>
+                    {branchId
+                      ? branchNameOf(
+                          branches.find(
+                            (b) =>
+                              branchIdOf(b) === branchId
+                          )
+                        )
+                      : "Not selected"}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Salesperson</span>
+
+                  <strong>
+                    {salesperson?.name || "—"}
+                  </strong>
+                </div>
+
                 <div>
                   <span>Rental Period</span>
 

@@ -1,2763 +1,8 @@
-// // import React, { useEffect, useState } from "react";
-
-// // import "./ProductList.css";
-
-// // import {
-// //     getProducts,
-// //     deleteProduct,
-// //     searchProducts
-// // } from "../../../../services/productService";
-
-// // import { toast } from "react-toastify";
-
-// // const API = import.meta.env.VITE_API_URL;
-
-// // const ProductList = () => {
-
-// //     // =====================================================
-// //     // STATES
-// //     // =====================================================
-
-// //     const [products, setProducts] = useState([]);
-// //     const [loading, setLoading] = useState(true);
-// //     const [search, setSearch] = useState("");
-// //     const [currentPage, setCurrentPage] = useState(1);
-
-// //     const itemsPerPage = 10;
-
-// //     // =====================================================
-// //     // LOAD ALL PRODUCTS
-// //     // =====================================================
-
-// //     const loadProducts = async () => {
-// //         try {
-// //             setLoading(true);
-
-// //             const res = await getProducts();
-
-// //             console.log(
-// //                 "PRODUCT LIST API RESPONSE:",
-// //                 res.data
-// //             );
-
-// //             // Backend response:
-// //             //
-// //             // {
-// //             //     success: true,
-// //             //     message: "...",
-// //             //     data: [...]
-// //             // }
-
-// //             const productData =
-// //                 Array.isArray(res.data?.data)
-// //                     ? res.data.data
-// //                     : Array.isArray(res.data)
-// //                         ? res.data
-// //                         : Array.isArray(res.data?.products)
-// //                             ? res.data.products
-// //                             : Array.isArray(res.data?.data?.products)
-// //                                 ? res.data.data.products
-// //                                 : [];
-
-// //             console.log(
-// //                 "PRODUCTS SET TO STATE:",
-// //                 productData
-// //             );
-
-// //             setProducts(productData);
-// //             setCurrentPage(1);
-
-// //         } catch (error) {
-
-// //             console.error(
-// //                 "GET PRODUCTS ERROR:",
-// //                 error
-// //             );
-
-// //             setProducts([]);
-
-// //             toast.error(
-// //                 error.response?.data?.message ||
-// //                 "Failed to load products"
-// //             );
-
-// //         } finally {
-
-// //             setLoading(false);
-// //         }
-// //     };
-
-// //     // =====================================================
-// //     // FIRST LOAD
-// //     // =====================================================
-
-// //     useEffect(() => {
-// //         loadProducts();
-// //     }, []);
-
-// //     // =====================================================
-// //     // SEARCH PRODUCTS
-// //     // =====================================================
-
-// //     const handleSearch = async (e) => {
-
-// //         const keyword = e.target.value;
-
-// //         setSearch(keyword);
-
-// //         // =================================================
-// //         // EMPTY SEARCH
-// //         // =================================================
-
-// //         if (!keyword.trim()) {
-
-// //             await loadProducts();
-
-// //             return;
-// //         }
-
-// //         try {
-
-// //             setLoading(true);
-
-// //             const res =
-// //                 await searchProducts(keyword);
-
-// //             console.log(
-// //                 "SEARCH API RESPONSE:",
-// //                 res.data
-// //             );
-
-// //             const searchData =
-// //                 Array.isArray(res.data?.data)
-// //                     ? res.data.data
-// //                     : Array.isArray(res.data)
-// //                         ? res.data
-// //                         : Array.isArray(res.data?.products)
-// //                             ? res.data.products
-// //                             : Array.isArray(res.data?.data?.products)
-// //                                 ? res.data.data.products
-// //                                 : [];
-
-// //             console.log(
-// //                 "SEARCH PRODUCTS:",
-// //                 searchData
-// //             );
-
-// //             setProducts(searchData);
-// //             setCurrentPage(1);
-
-// //         } catch (error) {
-
-// //             console.error(
-// //                 "SEARCH ERROR:",
-// //                 error
-// //             );
-
-// //             setProducts([]);
-
-// //             toast.error(
-// //                 error.response?.data?.message ||
-// //                 "Search failed"
-// //             );
-
-// //         } finally {
-
-// //             setLoading(false);
-// //         }
-// //     };
-
-// //     // =====================================================
-// //     // DELETE PRODUCT
-// //     // =====================================================
-
-// //     const handleDelete = async (id) => {
-
-// //         const confirmDelete =
-// //             window.confirm(
-// //                 "Are you sure you want to delete this product?"
-// //             );
-
-// //         if (!confirmDelete) {
-// //             return;
-// //         }
-
-// //         try {
-
-// //             setLoading(true);
-
-// //             console.log(
-// //                 "Deleting Product ID:",
-// //                 id
-// //             );
-
-// //             await deleteProduct(id);
-
-// //             toast.success(
-// //                 "Product Deleted Successfully"
-// //             );
-
-// //             // Reload product list
-// //             await loadProducts();
-
-// //         } catch (error) {
-
-// //             console.error(
-// //                 "DELETE PRODUCT ERROR:",
-// //                 error
-// //             );
-
-// //             toast.error(
-// //                 error.response?.data?.message ||
-// //                 "Delete Failed"
-// //             );
-
-// //         } finally {
-
-// //             setLoading(false);
-// //         }
-// //     };
-
-// //     // =====================================================
-// //     // PAGINATION
-// //     // =====================================================
-
-// //     const lastIndex =
-// //         currentPage * itemsPerPage;
-
-// //     const firstIndex =
-// //         lastIndex - itemsPerPage;
-
-// //     const currentProducts =
-// //         products.slice(
-// //             firstIndex,
-// //             lastIndex
-// //         );
-
-// //     const totalPages =
-// //         Math.ceil(
-// //             products.length /
-// //             itemsPerPage
-// //         );
-
-// //     // =====================================================
-// //     // IMAGE URL
-// //     // =====================================================
-
-// //     const getImageUrl = (product) => {
-
-// //         let imageUrl = null;
-
-// //         // -----------------------------------------------
-// //         // Multiple possible backend image structures
-// //         // -----------------------------------------------
-
-// //         if (
-// //             Array.isArray(product?.images) &&
-// //             product.images.length > 0
-// //         ) {
-
-// //             const firstImage =
-// //                 product.images[0];
-
-// //             if (typeof firstImage === "string") {
-// //                 imageUrl = firstImage;
-// //             } else {
-// //                 imageUrl =
-// //                     firstImage?.url ||
-// //                     firstImage?.path ||
-// //                     firstImage?.image ||
-// //                     firstImage?.src ||
-// //                     null;
-// //             }
-// //         }
-
-// //         // -----------------------------------------------
-// //         // Fallback image fields
-// //         // -----------------------------------------------
-
-// //         if (!imageUrl) {
-
-// //             imageUrl =
-// //                 product?.image ||
-// //                 product?.primaryImage ||
-// //                 product?.thumbnail ||
-// //                 product?.imageUrl ||
-// //                 null;
-// //         }
-
-// //         if (!imageUrl) {
-// //             return null;
-// //         }
-
-// //         // -----------------------------------------------
-// //         // Full URL
-// //         // -----------------------------------------------
-
-// //         if (
-// //             imageUrl.startsWith("http://") ||
-// //             imageUrl.startsWith("https://")
-// //         ) {
-
-// //             return imageUrl;
-// //         }
-
-// //         // -----------------------------------------------
-// //         // Backend URL
-// //         // -----------------------------------------------
-
-// //         const serverUrl =
-// //             String(API || "")
-// //                 .replace(/\/api\/?$/, "")
-// //                 .replace(/\/$/, "");
-
-// //         const cleanImagePath =
-// //             String(imageUrl)
-// //                 .replace(/^\/+/, "");
-
-// //         return `${serverUrl}/${cleanImagePath}`;
-// //     };
-
-// //     // =====================================================
-// //     // PRODUCT TYPE
-// //     // =====================================================
-
-// //     const getProductType = (product) => {
-
-// //         return (
-// //             product?.productType ||
-// //             "NEW"
-// //         );
-// //     };
-
-// //     // =====================================================
-// //     // CATEGORY NAME
-// //     // =====================================================
-
-// //     const getCategoryName = (product) => {
-
-// //         if (
-// //             typeof product?.category ===
-// //             "object"
-// //         ) {
-
-// //             return (
-// //                 product.category?.name ||
-// //                 product.category?.title ||
-// //                 "N/A"
-// //             );
-// //         }
-
-// //         return (
-// //             product?.category ||
-// //             "N/A"
-// //         );
-// //     };
-
-// //     // =====================================================
-// //     // SUBCATEGORY NAME
-// //     // =====================================================
-
-// //     const getSubcategoryName = (product) => {
-
-// //         if (
-// //             typeof product?.subcategory ===
-// //             "object"
-// //         ) {
-
-// //             return (
-// //                 product.subcategory?.name ||
-// //                 product.subcategory?.title ||
-// //                 "N/A"
-// //             );
-// //         }
-
-// //         return (
-// //             product?.subcategory ||
-// //             "N/A"
-// //         );
-// //     };
-
-// //     // =====================================================
-// //     // BRAND NAME
-// //     // =====================================================
-
-// //     const getBrandName = (product) => {
-
-// //         if (
-// //             typeof product?.brand ===
-// //             "object"
-// //         ) {
-
-// //             return (
-// //                 product.brand?.name ||
-// //                 product.brand?.title ||
-// //                 "N/A"
-// //             );
-// //         }
-
-// //         return (
-// //             product?.brand ||
-// //             "N/A"
-// //         );
-// //     };
-
-// //     // =====================================================
-// //     // REFURBISHED DETAILS
-// //     // =====================================================
-
-// //     const getRefurbishedDetails = (product) => {
-
-// //         return (
-// //             product?.refurbishedDetails ||
-// //             null
-// //         );
-// //     };
-
-// //     // =====================================================
-// //     // RENTAL DETAILS
-// //     // =====================================================
-
-// //     const getRentalDetails = (product) => {
-
-// //         return (
-// //             product?.rental ||
-// //             product?.rentalDetails ||
-// //             product?.rentalProduct ||
-// //             null
-// //         );
-// //     };
-
-// //     // =====================================================
-// //     // RENTAL QUANTITY
-// //     // =====================================================
-
-// //     const getRentalQuantity = (product) => {
-
-// //         const rental =
-// //             getRentalDetails(product);
-
-// //         if (!rental) {
-// //             return null;
-// //         }
-
-// //         return {
-// //             available:
-// //                 rental?.availableQuantity ??
-// //                 rental?.availableQty ??
-// //                 0,
-
-// //             total:
-// //                 rental?.totalQuantity ??
-// //                 rental?.quantity ??
-// //                 rental?.availableQuantity ??
-// //                 0,
-
-// //             rented:
-// //                 rental?.rentedQuantity ??
-// //                 0
-// //         };
-// //     };
-
-// //     // =====================================================
-// //     // RENTAL STATUS
-// //     // =====================================================
-
-// //     const getRentalStatus = (product) => {
-
-// //         const rental =
-// //             getRentalDetails(product);
-
-// //         if (!rental) {
-// //             return "NOT_CONFIGURED";
-// //         }
-
-// //         if (
-// //             rental?.isAvailableForRent === true
-// //         ) {
-
-// //             return "AVAILABLE";
-// //         }
-
-// //         return "UNAVAILABLE";
-// //     };
-
-// //     // =====================================================
-// //     // FORMAT MONEY
-// //     // =====================================================
-
-// //     const formatMoney = (value) => {
-
-// //         const number =
-// //             Number(value || 0);
-
-// //         return number.toLocaleString(
-// //             "en-IN"
-// //         );
-// //     };
-
-// //     // =====================================================
-// //     // UI
-// //     // =====================================================
-
-// //     return (
-
-// //         <div className="product-list1">
-
-// //             {/* =================================================
-// //                 HEADER
-// //             ================================================= */}
-
-// //             <div className="page-header1">
-
-// //                 <div>
-
-// //                     <h2>
-// //                         Product List
-// //                     </h2>
-
-// //                     <p>
-// //                         Manage all your products
-// //                     </p>
-
-// //                 </div>
-
-// //                 <input
-// //                     type="text"
-// //                     placeholder="Search Product..."
-// //                     value={search}
-// //                     onChange={handleSearch}
-// //                     className="search-box1"
-// //                 />
-
-// //             </div>
-
-// //             {/* =================================================
-// //                 LOADING
-// //             ================================================= */}
-
-// //             {loading ? (
-
-// //                 <div className="loading1">
-// //                     Loading Products...
-// //                 </div>
-
-// //             ) : (
-
-// //                 <>
-
-// //                     {/* =================================================
-// //                         TABLE
-// //                     ================================================= */}
-
-// //                     <div className="table-container1">
-
-// //                         <table className="product-table1">
-
-// //                             <thead>
-
-// //                                 <tr>
-
-// //                                     <th>
-// //                                         #
-// //                                     </th>
-
-// //                                     <th>
-// //                                         Image
-// //                                     </th>
-
-// //                                     <th>
-// //                                         Product Name
-// //                                     </th>
-
-// //                                     <th>
-// //                                         Type
-// //                                     </th>
-
-// //                                     <th>
-// //                                         Category
-// //                                     </th>
-
-// //                                     <th>
-// //                                         Subcategory
-// //                                     </th>
-
-// //                                     <th>
-// //                                         Brand
-// //                                     </th>
-
-// //                                     <th>
-// //                                         Refurbished Details
-// //                                     </th>
-
-// //                                     <th>
-// //                                         Rental Details
-// //                                     </th>
-
-// //                                     <th>
-// //                                         Purchase Price
-// //                                     </th>
-
-// //                                     <th>
-// //                                         Selling Price
-// //                                     </th>
-
-// //                                     <th>
-// //                                         MRP
-// //                                     </th>
-
-// //                                     <th>
-// //                                         Discount
-// //                                     </th>
-
-// //                                     <th>
-// //                                         GST
-// //                                     </th>
-
-// //                                     <th>
-// //                                         Stock
-// //                                     </th>
-
-// //                                     <th>
-// //                                         Status
-// //                                     </th>
-
-// //                                     <th>
-// //                                         Actions
-// //                                     </th>
-
-// //                                 </tr>
-
-// //                             </thead>
-
-// //                             <tbody>
-
-// //                                 {currentProducts.length > 0 ? (
-
-// //                                     currentProducts.map(
-// //                                         (
-// //                                             product,
-// //                                             index
-// //                                         ) => {
-
-// //                                             const imageUrl =
-// //                                                 getImageUrl(
-// //                                                     product
-// //                                                 );
-
-// //                                             const productType =
-// //                                                 getProductType(
-// //                                                     product
-// //                                                 );
-
-// //                                             const refurbishedDetails =
-// //                                                 getRefurbishedDetails(
-// //                                                     product
-// //                                                 );
-
-// //                                             const rentalDetails =
-// //                                                 getRentalDetails(
-// //                                                     product
-// //                                                 );
-
-// //                                             const rentalQuantity =
-// //                                                 getRentalQuantity(
-// //                                                     product
-// //                                                 );
-
-// //                                             const rentalStatus =
-// //                                                 getRentalStatus(
-// //                                                     product
-// //                                                 );
-
-// //                                             return (
-
-// //                                                 <tr
-// //                                                     key={
-// //                                                         product._id ||
-// //                                                         product.id ||
-// //                                                         index
-// //                                                     }
-// //                                                 >
-
-// //                                                     {/* =================================================
-// //                                                         NUMBER
-// //                                                     ================================================= */}
-
-// //                                                     <td>
-// //                                                         {
-// //                                                             firstIndex +
-// //                                                             index +
-// //                                                             1
-// //                                                         }
-// //                                                     </td>
-
-// //                                                     {/* =================================================
-// //                                                         IMAGE
-// //                                                     ================================================= */}
-
-// //                                                     <td>
-
-// //                                                         {imageUrl ? (
-
-// //                                                             <img
-// //                                                                 src={
-// //                                                                     imageUrl
-// //                                                                 }
-// //                                                                 alt={
-// //                                                                     product.name ||
-// //                                                                     "Product"
-// //                                                                 }
-// //                                                                 className="table-image1"
-// //                                                                 onError={(e) => {
-
-// //                                                                     console.error(
-// //                                                                         "PRODUCT IMAGE ERROR:",
-// //                                                                         imageUrl
-// //                                                                     );
-
-// //                                                                     e.target.style.display =
-// //                                                                         "none";
-
-// //                                                                 }}
-// //                                                             />
-
-// //                                                         ) : (
-
-// //                                                             <div className="no-image1">
-// //                                                                 No Image
-// //                                                             </div>
-
-// //                                                         )}
-
-// //                                                     </td>
-
-// //                                                     {/* =================================================
-// //                                                         PRODUCT NAME
-// //                                                     ================================================= */}
-
-// //                                                     <td>
-
-// //                                                         <strong>
-// //                                                             {
-// //                                                                 product.name ||
-// //                                                                 "N/A"
-// //                                                             }
-// //                                                         </strong>
-
-// //                                                     </td>
-
-// //                                                     {/* =================================================
-// //                                                         PRODUCT TYPE
-// //                                                     ================================================= */}
-
-// //                                                     <td>
-
-// //                                                         {productType ===
-// //                                                         "REFURBISHED" ? (
-
-// //                                                             <span className="refurbished-badge">
-// //                                                                 Refurbished
-// //                                                             </span>
-
-// //                                                         ) : productType ===
-// //                                                         "RENTAL" ? (
-
-// //                                                             <span className="rental-product-badge">
-// //                                                                 Rental
-// //                                                             </span>
-
-// //                                                         ) : (
-
-// //                                                             <span className="new-product-badge">
-// //                                                                 New
-// //                                                             </span>
-
-// //                                                         )}
-
-// //                                                     </td>
-
-// //                                                     {/* =================================================
-// //                                                         CATEGORY
-// //                                                     ================================================= */}
-
-// //                                                     <td>
-
-// //                                                         {
-// //                                                             getCategoryName(
-// //                                                                 product
-// //                                                             )
-// //                                                         }
-
-// //                                                     </td>
-
-// //                                                     {/* =================================================
-// //                                                         SUBCATEGORY
-// //                                                     ================================================= */}
-
-// //                                                     <td>
-
-// //                                                         {
-// //                                                             getSubcategoryName(
-// //                                                                 product
-// //                                                             )
-// //                                                         }
-
-// //                                                     </td>
-
-// //                                                     {/* =================================================
-// //                                                         BRAND
-// //                                                     ================================================= */}
-
-// //                                                     <td>
-
-// //                                                         {
-// //                                                             getBrandName(
-// //                                                                 product
-// //                                                             )
-// //                                                         }
-
-// //                                                     </td>
-
-// //                                                     {/* =================================================
-// //                                                         REFURBISHED DETAILS
-// //                                                     ================================================= */}
-
-// //                                                     <td>
-
-// //                                                         {productType ===
-// //                                                         "REFURBISHED" ? (
-
-// //                                                             refurbishedDetails ? (
-
-// //                                                                 <div className="refurbished-details1">
-
-// //                                                                     <div>
-// //                                                                         <strong>
-// //                                                                             Grade:
-// //                                                                         </strong>{" "}
-
-// //                                                                         {
-// //                                                                             refurbishedDetails.grade ||
-// //                                                                             "N/A"
-// //                                                                         }
-// //                                                                     </div>
-
-// //                                                                     <div>
-// //                                                                         <strong>
-// //                                                                             Battery:
-// //                                                                         </strong>{" "}
-
-// //                                                                         {
-// //                                                                             refurbishedDetails.batteryHealth ??
-// //                                                                             0
-// //                                                                         }%
-
-// //                                                                     </div>
-
-// //                                                                     <div>
-// //                                                                         <strong>
-// //                                                                             Warranty:
-// //                                                                         </strong>{" "}
-
-// //                                                                         {
-// //                                                                             refurbishedDetails.warrantyMonths ??
-// //                                                                             0
-// //                                                                         }{" "}
-// //                                                                         months
-// //                                                                     </div>
-
-// //                                                                     <div>
-// //                                                                         <strong>
-// //                                                                             Testing:
-// //                                                                         </strong>{" "}
-
-// //                                                                         {
-// //                                                                             refurbishedDetails.testingStatus ||
-// //                                                                             "N/A"
-// //                                                                         }
-// //                                                                     </div>
-
-// //                                                                 </div>
-
-// //                                                             ) : (
-
-// //                                                                 <span>
-// //                                                                     No Details
-// //                                                                 </span>
-
-// //                                                             )
-
-// //                                                         ) : (
-
-// //                                                             <span className="not-applicable1">
-// //                                                                 N/A
-// //                                                             </span>
-
-// //                                                         )}
-
-// //                                                     </td>
-
-// //                                                     {/* =================================================
-// //                                                         RENTAL DETAILS
-// //                                                     ================================================= */}
-
-// //                                                     <td>
-
-// //                                                         {productType ===
-// //                                                         "RENTAL" ? (
-
-// //                                                             rentalDetails ? (
-
-// //                                                                 <div className="rental-details1">
-
-// //                                                                     {/* -----------------------------------------
-// //                                                                         RENTAL STATUS
-// //                                                                     ----------------------------------------- */}
-
-// //                                                                     <div>
-
-// //                                                                         <strong>
-// //                                                                             Rental:
-// //                                                                         </strong>{" "}
-
-// //                                                                         {rentalStatus ===
-// //                                                                         "AVAILABLE" ? (
-
-// //                                                                             <span className="rental-available1">
-// //                                                                                 Available
-// //                                                                             </span>
-
-// //                                                                         ) : (
-
-// //                                                                             <span className="rental-unavailable1">
-// //                                                                                 Unavailable
-// //                                                                             </span>
-
-// //                                                                         )}
-
-// //                                                                     </div>
-
-// //                                                                     {/* -----------------------------------------
-// //                                                                         MONTHLY RENT
-// //                                                                     ----------------------------------------- */}
-
-// //                                                                     <div>
-
-// //                                                                         <strong>
-// //                                                                             Monthly:
-// //                                                                         </strong>{" "}
-
-// //                                                                         ₹
-// //                                                                         {formatMoney(
-// //                                                                             rentalDetails.monthlyRent
-// //                                                                         )}
-
-// //                                                                     </div>
-
-// //                                                                     {/* -----------------------------------------
-// //                                                                         SECURITY DEPOSIT
-// //                                                                     ----------------------------------------- */}
-
-// //                                                                     <div>
-
-// //                                                                         <strong>
-// //                                                                             Deposit:
-// //                                                                         </strong>{" "}
-
-// //                                                                         ₹
-// //                                                                         {formatMoney(
-// //                                                                             rentalDetails.securityDeposit
-// //                                                                         )}
-
-// //                                                                     </div>
-
-// //                                                                     {/* -----------------------------------------
-// //                                                                         MINIMUM MONTHS
-// //                                                                     ----------------------------------------- */}
-
-// //                                                                     <div>
-
-// //                                                                         <strong>
-// //                                                                             Minimum:
-// //                                                                         </strong>{" "}
-
-// //                                                                         {
-// //                                                                             rentalDetails.minimumRentalMonths ??
-// //                                                                             3
-// //                                                                         }{" "}
-// //                                                                         months
-
-// //                                                                     </div>
-
-// //                                                                     {/* -----------------------------------------
-// //                                                                         GST
-// //                                                                     ----------------------------------------- */}
-
-// //                                                                     <div>
-
-// //                                                                         <strong>
-// //                                                                             GST:
-// //                                                                         </strong>{" "}
-
-// //                                                                         {
-// //                                                                             rentalDetails.gst ??
-// //                                                                             0
-// //                                                                         }%
-
-// //                                                                     </div>
-
-// //                                                                     {/* -----------------------------------------
-// //                                                                         QUANTITY
-// //                                                                     ----------------------------------------- */}
-
-// //                                                                     <div>
-
-// //                                                                         <strong>
-// //                                                                             Available:
-// //                                                                         </strong>{" "}
-
-// //                                                                         {
-// //                                                                             rentalQuantity?.available ??
-// //                                                                             0
-// //                                                                         }
-
-// //                                                                     </div>
-
-// //                                                                     <div>
-
-// //                                                                         <strong>
-// //                                                                             Total:
-// //                                                                         </strong>{" "}
-
-// //                                                                         {
-// //                                                                             rentalQuantity?.total ??
-// //                                                                             0
-// //                                                                         }
-
-// //                                                                     </div>
-
-// //                                                                     <div>
-
-// //                                                                         <strong>
-// //                                                                             Rented:
-// //                                                                         </strong>{" "}
-
-// //                                                                         {
-// //                                                                             rentalQuantity?.rented ??
-// //                                                                             0
-// //                                                                         }
-
-// //                                                                     </div>
-
-// //                                                                     {/* -----------------------------------------
-// //                                                                         SOFTWARE
-// //                                                                     ----------------------------------------- */}
-
-// //                                                                     <div>
-
-// //                                                                         <strong>
-// //                                                                             Software:
-// //                                                                         </strong>{" "}
-
-// //                                                                         {rentalDetails.basicSoftwareInstalled ===
-// //                                                                         true
-// //                                                                             ? "Installed"
-// //                                                                             : "Not Installed"}
-
-// //                                                                     </div>
-
-// //                                                                     {/* -----------------------------------------
-// //                                                                         INCLUDED ITEMS
-// //                                                                     ----------------------------------------- */}
-
-// //                                                                     {Array.isArray(
-// //                                                                         rentalDetails.includedItems
-// //                                                                     ) &&
-// //                                                                     rentalDetails.includedItems.length >
-// //                                                                     0 ? (
-
-// //                                                                         <div>
-
-// //                                                                             <strong>
-// //                                                                                 Included:
-// //                                                                             </strong>{" "}
-
-// //                                                                             {
-// //                                                                                 rentalDetails.includedItems.join(
-// //                                                                                     ", "
-// //                                                                                 )
-// //                                                                             }
-
-// //                                                                         </div>
-
-// //                                                                     ) : null}
-
-// //                                                                 </div>
-
-// //                                                             ) : (
-
-// //                                                                 <span className="rental-not-configured1">
-// //                                                                     Rental Not Configured
-// //                                                                 </span>
-
-// //                                                             )
-
-// //                                                         ) : (
-
-// //                                                             <span className="not-applicable1">
-// //                                                                 N/A
-// //                                                             </span>
-
-// //                                                         )}
-
-// //                                                     </td>
-
-// //                                                     {/* =================================================
-// //                                                         PURCHASE PRICE
-// //                                                     ================================================= */}
-
-// //                                                     <td>
-
-// //                                                         ₹{" "}
-
-// //                                                         {
-// //                                                             formatMoney(
-// //                                                                 product.pricing
-// //                                                                     ?.purchasePrice
-// //                                                             )
-// //                                                         }
-
-// //                                                     </td>
-
-// //                                                     {/* =================================================
-// //                                                         SELLING PRICE
-// //                                                     ================================================= */}
-
-// //                                                     <td>
-
-// //                                                         ₹{" "}
-
-// //                                                         {
-// //                                                             formatMoney(
-// //                                                                 product.pricing
-// //                                                                     ?.sellingPrice
-// //                                                             )
-// //                                                         }
-
-// //                                                     </td>
-
-// //                                                     {/* =================================================
-// //                                                         MRP
-// //                                                     ================================================= */}
-
-// //                                                     <td>
-
-// //                                                         ₹{" "}
-
-// //                                                         {
-// //                                                             formatMoney(
-// //                                                                 product.pricing
-// //                                                                     ?.mrp
-// //                                                             )
-// //                                                         }
-
-// //                                                     </td>
-
-// //                                                     {/* =================================================
-// //                                                         DISCOUNT
-// //                                                     ================================================= */}
-
-// //                                                     <td>
-
-// //                                                         {
-// //                                                             product.pricing
-// //                                                                 ?.discount ??
-// //                                                             0
-// //                                                         }%
-
-// //                                                     </td>
-
-// //                                                     {/* =================================================
-// //                                                         GST
-// //                                                     ================================================= */}
-
-// //                                                     <td>
-
-// //                                                         {
-// //                                                             product.pricing
-// //                                                                 ?.gst ??
-// //                                                             0
-// //                                                         }%
-
-// //                                                     </td>
-
-// //                                                     {/* =================================================
-// //                                                         STOCK
-// //                                                     ================================================= */}
-
-// //                                                     <td>
-
-// //                                                         {
-// //                                                             product.inventory
-// //                                                                 ?.currentStock ??
-// //                                                             product.stock ??
-// //                                                             0
-// //                                                         }
-
-// //                                                     </td>
-
-// //                                                     {/* =================================================
-// //                                                         STATUS
-// //                                                     ================================================= */}
-
-// //                                                     <td>
-
-// //                                                         {product.status ===
-// //                                                         "ACTIVE" ? (
-
-// //                                                             <span className="active-status">
-// //                                                                 Active
-// //                                                             </span>
-
-// //                                                         ) : (
-
-// //                                                             <span className="inactive-status">
-// //                                                                 Inactive
-// //                                                             </span>
-
-// //                                                         )}
-
-// //                                                     </td>
-
-// //                                                     {/* =================================================
-// //                                                         ACTIONS
-// //                                                     ================================================= */}
-
-// //                                                     <td>
-
-// //                                                         <button
-// //                                                             type="button"
-// //                                                             className="delete-btn1"
-// //                                                             onClick={() =>
-// //                                                                 handleDelete(
-// //                                                                     product._id ||
-// //                                                                     product.id
-// //                                                                 )
-// //                                                             }
-// //                                                         >
-// //                                                             Delete
-// //                                                         </button>
-
-// //                                                     </td>
-
-// //                                                 </tr>
-
-// //                                             );
-// //                                         }
-// //                                     )
-
-// //                                 ) : (
-
-// //                                     <tr>
-
-// //                                         <td
-// //                                             colSpan="17"
-// //                                             className="no-products1"
-// //                                         >
-// //                                             No Products Found
-// //                                         </td>
-
-// //                                     </tr>
-
-// //                                 )}
-
-// //                             </tbody>
-
-// //                         </table>
-
-// //                     </div>
-
-// //                     {/* =================================================
-// //                         PAGINATION
-// //                     ================================================= */}
-
-// //                     {totalPages > 1 && (
-
-// //                         <div className="pagination1">
-
-// //                             <button
-// //                                 type="button"
-// //                                 disabled={
-// //                                     currentPage === 1
-// //                                 }
-// //                                 onClick={() =>
-// //                                     setCurrentPage(
-// //                                         currentPage - 1
-// //                                     )
-// //                                 }
-// //                             >
-// //                                 Previous
-// //                             </button>
-
-// //                             {[...Array(totalPages)].map(
-// //                                 (_, index) => (
-
-// //                                     <button
-// //                                         type="button"
-// //                                         key={index}
-// //                                         className={
-// //                                             currentPage ===
-// //                                             index + 1
-// //                                                 ? "active-page"
-// //                                                 : ""
-// //                                         }
-// //                                         onClick={() =>
-// //                                             setCurrentPage(
-// //                                                 index + 1
-// //                                             )
-// //                                         }
-// //                                     >
-// //                                         {
-// //                                             index + 1
-// //                                         }
-// //                                     </button>
-
-// //                                 )
-// //                             )}
-
-// //                             <button
-// //                                 type="button"
-// //                                 disabled={
-// //                                     currentPage ===
-// //                                     totalPages
-// //                                 }
-// //                                 onClick={() =>
-// //                                     setCurrentPage(
-// //                                         currentPage + 1
-// //                                     )
-// //                                 }
-// //                             >
-// //                                 Next
-// //                             </button>
-
-// //                         </div>
-
-// //                     )}
-
-// //                 </>
-
-// //             )}
-
-// //         </div>
-// //     );
-// // };
-
-// // export default ProductList;
-
-
-
-// import React, { useEffect, useState } from "react";
-
-// import "./ProductList.css";
-
-// import {
-//     getProducts,
-//     deleteProduct,
-//     searchProducts
-// } from "../../../../services/productService";
-
-// import { toast } from "react-toastify";
-
-// const API = import.meta.env.VITE_API_URL;
-
-// const ProductList = () => {
-
-//     // =====================================================
-//     // STATES
-//     // =====================================================
-
-//     const [products, setProducts] = useState([]);
-//     const [loading, setLoading] = useState(true);
-//     const [search, setSearch] = useState("");
-//     const [currentPage, setCurrentPage] = useState(1);
-
-//     const itemsPerPage = 10;
-
-//     // =====================================================
-//     // LOAD ALL PRODUCTS
-//     // =====================================================
-
-//     const loadProducts = async () => {
-//         try {
-//             setLoading(true);
-
-//             const res = await getProducts();
-
-//             console.log(
-//                 "PRODUCT LIST API RESPONSE:",
-//                 res.data
-//             );
-
-//             // Backend response:
-//             //
-//             // {
-//             //     success: true,
-//             //     message: "...",
-//             //     data: [...]
-//             // }
-
-//             const productData =
-//                 Array.isArray(res.data?.data)
-//                     ? res.data.data
-//                     : Array.isArray(res.data)
-//                         ? res.data
-//                         : Array.isArray(res.data?.products)
-//                             ? res.data.products
-//                             : Array.isArray(res.data?.data?.products)
-//                                 ? res.data.data.products
-//                                 : [];
-
-//             console.log(
-//                 "PRODUCTS SET TO STATE:",
-//                 productData
-//             );
-
-//             setProducts(productData);
-//             setCurrentPage(1);
-
-//         } catch (error) {
-
-//             console.error(
-//                 "GET PRODUCTS ERROR:",
-//                 error
-//             );
-
-//             setProducts([]);
-
-//             toast.error(
-//                 error.response?.data?.message ||
-//                 "Failed to load products"
-//             );
-
-//         } finally {
-
-//             setLoading(false);
-//         }
-//     };
-
-//     // =====================================================
-//     // FIRST LOAD
-//     // =====================================================
-
-//     useEffect(() => {
-//         loadProducts();
-//     }, []);
-
-//     // =====================================================
-//     // SEARCH PRODUCTS
-//     // =====================================================
-
-//     const handleSearch = async (e) => {
-
-//         const keyword = e.target.value;
-
-//         setSearch(keyword);
-
-//         // =================================================
-//         // EMPTY SEARCH
-//         // =================================================
-
-//         if (!keyword.trim()) {
-
-//             await loadProducts();
-
-//             return;
-//         }
-
-//         try {
-
-//             setLoading(true);
-
-//             const res =
-//                 await searchProducts(keyword);
-
-//             console.log(
-//                 "SEARCH API RESPONSE:",
-//                 res.data
-//             );
-
-//             const searchData =
-//                 Array.isArray(res.data?.data)
-//                     ? res.data.data
-//                     : Array.isArray(res.data)
-//                         ? res.data
-//                         : Array.isArray(res.data?.products)
-//                             ? res.data.products
-//                             : Array.isArray(res.data?.data?.products)
-//                                 ? res.data.data.products
-//                                 : [];
-
-//             console.log(
-//                 "SEARCH PRODUCTS:",
-//                 searchData
-//             );
-
-//             setProducts(searchData);
-//             setCurrentPage(1);
-
-//         } catch (error) {
-
-//             console.error(
-//                 "SEARCH ERROR:",
-//                 error
-//             );
-
-//             setProducts([]);
-
-//             toast.error(
-//                 error.response?.data?.message ||
-//                 "Search failed"
-//             );
-
-//         } finally {
-
-//             setLoading(false);
-//         }
-//     };
-
-//     // =====================================================
-//     // DELETE PRODUCT
-//     // =====================================================
-
-//     const handleDelete = async (id) => {
-
-//         const confirmDelete =
-//             window.confirm(
-//                 "Are you sure you want to delete this product?"
-//             );
-
-//         if (!confirmDelete) {
-//             return;
-//         }
-
-//         try {
-
-//             setLoading(true);
-
-//             console.log(
-//                 "Deleting Product ID:",
-//                 id
-//             );
-
-//             await deleteProduct(id);
-
-//             toast.success(
-//                 "Product Deleted Successfully"
-//             );
-
-//             // Reload product list
-//             await loadProducts();
-
-//         } catch (error) {
-
-//             console.error(
-//                 "DELETE PRODUCT ERROR:",
-//                 error
-//             );
-
-//             toast.error(
-//                 error.response?.data?.message ||
-//                 "Delete Failed"
-//             );
-
-//         } finally {
-
-//             setLoading(false);
-//         }
-//     };
-
-//     // =====================================================
-//     // PAGINATION
-//     // =====================================================
-
-//     const lastIndex =
-//         currentPage * itemsPerPage;
-
-//     const firstIndex =
-//         lastIndex - itemsPerPage;
-
-//     const currentProducts =
-//         products.slice(
-//             firstIndex,
-//             lastIndex
-//         );
-
-//     const totalPages =
-//         Math.ceil(
-//             products.length /
-//             itemsPerPage
-//         );
-
-//     // =====================================================
-//     // IMAGE URL
-//     // =====================================================
-
-//     const getImageUrl = (product) => {
-
-//         let imageUrl = null;
-
-//         // -----------------------------------------------
-//         // Multiple possible backend image structures
-//         // -----------------------------------------------
-
-//         if (
-//             Array.isArray(product?.images) &&
-//             product.images.length > 0
-//         ) {
-
-//             const firstImage =
-//                 product.images[0];
-
-//             if (typeof firstImage === "string") {
-//                 imageUrl = firstImage;
-//             } else {
-//                 imageUrl =
-//                     firstImage?.url ||
-//                     firstImage?.path ||
-//                     firstImage?.image ||
-//                     firstImage?.src ||
-//                     null;
-//             }
-//         }
-
-//         // -----------------------------------------------
-//         // Fallback image fields
-//         // -----------------------------------------------
-
-//         if (!imageUrl) {
-
-//             imageUrl =
-//                 product?.image ||
-//                 product?.primaryImage ||
-//                 product?.thumbnail ||
-//                 product?.imageUrl ||
-//                 null;
-//         }
-
-//         if (!imageUrl) {
-//             return null;
-//         }
-
-//         // -----------------------------------------------
-//         // Full URL
-//         // -----------------------------------------------
-
-//         if (
-//             imageUrl.startsWith("http://") ||
-//             imageUrl.startsWith("https://")
-//         ) {
-
-//             return imageUrl;
-//         }
-
-//         // -----------------------------------------------
-//         // Backend URL
-//         // -----------------------------------------------
-
-//         const serverUrl =
-//             String(API || "")
-//                 .replace(/\/api\/?$/, "")
-//                 .replace(/\/$/, "");
-
-//         const cleanImagePath =
-//             String(imageUrl)
-//                 .replace(/^\/+/, "");
-
-//         return `${serverUrl}/${cleanImagePath}`;
-//     };
-
-//     // =====================================================
-//     // PRODUCT TYPE
-//     // =====================================================
-
-//     const getProductType = (product) => {
-
-//         return (
-//             product?.productType ||
-//             "NEW"
-//         );
-//     };
-
-//     // =====================================================
-//     // CATEGORY NAME
-//     // =====================================================
-
-//     const getCategoryName = (product) => {
-
-//         if (
-//             typeof product?.category ===
-//             "object"
-//         ) {
-
-//             return (
-//                 product.category?.name ||
-//                 product.category?.title ||
-//                 "N/A"
-//             );
-//         }
-
-//         return (
-//             product?.category ||
-//             "N/A"
-//         );
-//     };
-
-//     // =====================================================
-//     // SUBCATEGORY NAME
-//     // =====================================================
-
-//     const getSubcategoryName = (product) => {
-
-//         if (
-//             typeof product?.subcategory ===
-//             "object"
-//         ) {
-
-//             return (
-//                 product.subcategory?.name ||
-//                 product.subcategory?.title ||
-//                 "N/A"
-//             );
-//         }
-
-//         return (
-//             product?.subcategory ||
-//             "N/A"
-//         );
-//     };
-
-//     // =====================================================
-//     // BRAND NAME
-//     // =====================================================
-
-//     const getBrandName = (product) => {
-
-//         if (
-//             typeof product?.brand ===
-//             "object"
-//         ) {
-
-//             return (
-//                 product.brand?.name ||
-//                 product.brand?.title ||
-//                 "N/A"
-//             );
-//         }
-
-//         return (
-//             product?.brand ||
-//             "N/A"
-//         );
-//     };
-
-//     // =====================================================
-//     // REFURBISHED DETAILS
-//     // =====================================================
-
-//     const getRefurbishedDetails = (product) => {
-
-//         return (
-//             product?.refurbishedDetails ||
-//             null
-//         );
-//     };
-
-//     // =====================================================
-//     // RENTAL DETAILS
-//     // =====================================================
-
-//     const getRentalDetails = (product) => {
-
-//         return (
-//             product?.rental ||
-//             product?.rentalDetails ||
-//             product?.rentalProduct ||
-//             null
-//         );
-//     };
-
-//     // =====================================================
-//     // RENTAL QUANTITY
-//     // =====================================================
-
-//     const getRentalQuantity = (product) => {
-
-//         const rental =
-//             getRentalDetails(product);
-
-//         if (!rental) {
-//             return null;
-//         }
-
-//         return {
-//             available:
-//                 rental?.availableQuantity ??
-//                 rental?.availableQty ??
-//                 0,
-
-//             total:
-//                 rental?.totalQuantity ??
-//                 rental?.quantity ??
-//                 rental?.availableQuantity ??
-//                 0,
-
-//             rented:
-//                 rental?.rentedQuantity ??
-//                 0
-//         };
-//     };
-
-//     // =====================================================
-//     // RENTAL STATUS
-//     // =====================================================
-
-//     const getRentalStatus = (product) => {
-
-//         const rental =
-//             getRentalDetails(product);
-
-//         if (!rental) {
-//             return "NOT_CONFIGURED";
-//         }
-
-//         if (
-//             rental?.isAvailableForRent === true
-//         ) {
-
-//             return "AVAILABLE";
-//         }
-
-//         return "UNAVAILABLE";
-//     };
-
-//     // =====================================================
-//     // FORMAT MONEY
-//     // =====================================================
-
-//     const formatMoney = (value) => {
-
-//         const number =
-//             Number(value || 0);
-
-//         return number.toLocaleString(
-//             "en-IN"
-//         );
-//     };
-
-//     // =====================================================
-//     // UI
-//     // =====================================================
-
-//     return (
-
-//         <div className="product-list1">
-
-//             {/* =================================================
-//                 HEADER
-//             ================================================= */}
-
-//             <div className="page-header1">
-
-//                 <div>
-
-//                     <h2>
-//                         Product List
-//                     </h2>
-
-//                     <p>
-//                         Manage all your products
-//                     </p>
-
-//                 </div>
-
-//                 <input
-//                     type="text"
-//                     placeholder="Search Product..."
-//                     value={search}
-//                     onChange={handleSearch}
-//                     className="search-box1"
-//                 />
-
-//             </div>
-
-//             {/* =================================================
-//                 LOADING
-//             ================================================= */}
-
-//             {loading ? (
-
-//                 <div className="loading1">
-//                     Loading Products...
-//                 </div>
-
-//             ) : (
-
-//                 <>
-
-//                     {/* =================================================
-//                         TABLE
-//                     ================================================= */}
-
-//                     <div className="table-container1">
-
-//                         <table className="product-table1">
-
-//                             <thead>
-
-//                                 <tr>
-
-//                                     <th>
-//                                         #
-//                                     </th>
-
-//                                     <th>
-//                                         Image
-//                                     </th>
-
-//                                     <th>
-//                                         Product Name
-//                                     </th>
-
-//                                     <th>
-//                                         Type
-//                                     </th>
-
-//                                     <th>
-//                                         Category
-//                                     </th>
-
-//                                     <th>
-//                                         Subcategory
-//                                     </th>
-
-//                                     <th>
-//                                         Brand
-//                                     </th>
-
-//                                     <th>
-//                                         Refurbished Details
-//                                     </th>
-
-//                                     <th>
-//                                         Rental Details
-//                                     </th>
-
-//                                     <th>
-//                                         Purchase Price
-//                                     </th>
-
-//                                     <th>
-//                                         Retail Price (Personal)
-//                                     </th>
-
-//                                     <th>
-//                                         Wholesale Price (Business)
-//                                     </th>
-
-//                                     <th>
-//                                         MRP
-//                                     </th>
-
-//                                     <th>
-//                                         Discount
-//                                     </th>
-
-//                                     <th>
-//                                         GST
-//                                     </th>
-
-//                                     <th>
-//                                         Stock
-//                                     </th>
-
-//                                     <th>
-//                                         Status
-//                                     </th>
-
-//                                     <th>
-//                                         Actions
-//                                     </th>
-
-//                                 </tr>
-
-//                             </thead>
-
-//                             <tbody>
-
-//                                 {currentProducts.length > 0 ? (
-
-//                                     currentProducts.map(
-//                                         (
-//                                             product,
-//                                             index
-//                                         ) => {
-
-//                                             const imageUrl =
-//                                                 getImageUrl(
-//                                                     product
-//                                                 );
-
-//                                             const productType =
-//                                                 getProductType(
-//                                                     product
-//                                                 );
-
-//                                             const refurbishedDetails =
-//                                                 getRefurbishedDetails(
-//                                                     product
-//                                                 );
-
-//                                             const rentalDetails =
-//                                                 getRentalDetails(
-//                                                     product
-//                                                 );
-
-//                                             const rentalQuantity =
-//                                                 getRentalQuantity(
-//                                                     product
-//                                                 );
-
-//                                             const rentalStatus =
-//                                                 getRentalStatus(
-//                                                     product
-//                                                 );
-
-//                                             return (
-
-//                                                 <tr
-//                                                     key={
-//                                                         product._id ||
-//                                                         product.id ||
-//                                                         index
-//                                                     }
-//                                                 >
-
-//                                                     {/* =================================================
-//                                                         NUMBER
-//                                                     ================================================= */}
-
-//                                                     <td>
-//                                                         {
-//                                                             firstIndex +
-//                                                             index +
-//                                                             1
-//                                                         }
-//                                                     </td>
-
-//                                                     {/* =================================================
-//                                                         IMAGE
-//                                                     ================================================= */}
-
-//                                                     <td>
-
-//                                                         {imageUrl ? (
-
-//                                                             <img
-//                                                                 src={
-//                                                                     imageUrl
-//                                                                 }
-//                                                                 alt={
-//                                                                     product.name ||
-//                                                                     "Product"
-//                                                                 }
-//                                                                 className="table-image1"
-//                                                                 onError={(e) => {
-
-//                                                                     console.error(
-//                                                                         "PRODUCT IMAGE ERROR:",
-//                                                                         imageUrl
-//                                                                     );
-
-//                                                                     e.target.style.display =
-//                                                                         "none";
-
-//                                                                 }}
-//                                                             />
-
-//                                                         ) : (
-
-//                                                             <div className="no-image1">
-//                                                                 No Image
-//                                                             </div>
-
-//                                                         )}
-
-//                                                     </td>
-
-//                                                     {/* =================================================
-//                                                         PRODUCT NAME
-//                                                     ================================================= */}
-
-//                                                     <td>
-
-//                                                         <strong>
-//                                                             {
-//                                                                 product.name ||
-//                                                                 "N/A"
-//                                                             }
-//                                                         </strong>
-
-//                                                     </td>
-
-//                                                     {/* =================================================
-//                                                         PRODUCT TYPE
-//                                                     ================================================= */}
-
-//                                                     <td>
-
-//                                                         {productType ===
-//                                                         "REFURBISHED" ? (
-
-//                                                             <span className="refurbished-badge">
-//                                                                 Refurbished
-//                                                             </span>
-
-//                                                         ) : productType ===
-//                                                         "RENTAL" ? (
-
-//                                                             <span className="rental-product-badge">
-//                                                                 Rental
-//                                                             </span>
-
-//                                                         ) : (
-
-//                                                             <span className="new-product-badge">
-//                                                                 New
-//                                                             </span>
-
-//                                                         )}
-
-//                                                     </td>
-
-//                                                     {/* =================================================
-//                                                         CATEGORY
-//                                                     ================================================= */}
-
-//                                                     <td>
-
-//                                                         {
-//                                                             getCategoryName(
-//                                                                 product
-//                                                             )
-//                                                         }
-
-//                                                     </td>
-
-//                                                     {/* =================================================
-//                                                         SUBCATEGORY
-//                                                     ================================================= */}
-
-//                                                     <td>
-
-//                                                         {
-//                                                             getSubcategoryName(
-//                                                                 product
-//                                                             )
-//                                                         }
-
-//                                                     </td>
-
-//                                                     {/* =================================================
-//                                                         BRAND
-//                                                     ================================================= */}
-
-//                                                     <td>
-
-//                                                         {
-//                                                             getBrandName(
-//                                                                 product
-//                                                             )
-//                                                         }
-
-//                                                     </td>
-
-//                                                     {/* =================================================
-//                                                         REFURBISHED DETAILS
-//                                                     ================================================= */}
-
-//                                                     <td>
-
-//                                                         {productType ===
-//                                                         "REFURBISHED" ? (
-
-//                                                             refurbishedDetails ? (
-
-//                                                                 <div className="refurbished-details1">
-
-//                                                                     <div>
-//                                                                         <strong>
-//                                                                             Grade:
-//                                                                         </strong>{" "}
-
-//                                                                         {
-//                                                                             refurbishedDetails.grade ||
-//                                                                             "N/A"
-//                                                                         }
-//                                                                     </div>
-
-//                                                                     <div>
-//                                                                         <strong>
-//                                                                             Battery:
-//                                                                         </strong>{" "}
-
-//                                                                         {
-//                                                                             refurbishedDetails.batteryHealth ??
-//                                                                             0
-//                                                                         }%
-
-//                                                                     </div>
-
-//                                                                     <div>
-//                                                                         <strong>
-//                                                                             Warranty:
-//                                                                         </strong>{" "}
-
-//                                                                         {
-//                                                                             refurbishedDetails.warrantyMonths ??
-//                                                                             0
-//                                                                         }{" "}
-//                                                                         months
-//                                                                     </div>
-
-//                                                                     <div>
-//                                                                         <strong>
-//                                                                             Testing:
-//                                                                         </strong>{" "}
-
-//                                                                         {
-//                                                                             refurbishedDetails.testingStatus ||
-//                                                                             "N/A"
-//                                                                         }
-//                                                                     </div>
-
-//                                                                 </div>
-
-//                                                             ) : (
-
-//                                                                 <span>
-//                                                                     No Details
-//                                                                 </span>
-
-//                                                             )
-
-//                                                         ) : (
-
-//                                                             <span className="not-applicable1">
-//                                                                 N/A
-//                                                             </span>
-
-//                                                         )}
-
-//                                                     </td>
-
-//                                                     {/* =================================================
-//                                                         RENTAL DETAILS
-//                                                     ================================================= */}
-
-//                                                     <td>
-
-//                                                         {productType ===
-//                                                         "RENTAL" ? (
-
-//                                                             rentalDetails ? (
-
-//                                                                 <div className="rental-details1">
-
-//                                                                     {/* -----------------------------------------
-//                                                                         RENTAL STATUS
-//                                                                     ----------------------------------------- */}
-
-//                                                                     <div>
-
-//                                                                         <strong>
-//                                                                             Rental:
-//                                                                         </strong>{" "}
-
-//                                                                         {rentalStatus ===
-//                                                                         "AVAILABLE" ? (
-
-//                                                                             <span className="rental-available1">
-//                                                                                 Available
-//                                                                             </span>
-
-//                                                                         ) : (
-
-//                                                                             <span className="rental-unavailable1">
-//                                                                                 Unavailable
-//                                                                             </span>
-
-//                                                                         )}
-
-//                                                                     </div>
-
-//                                                                     {/* -----------------------------------------
-//                                                                         MONTHLY RENT
-//                                                                     ----------------------------------------- */}
-
-//                                                                     <div>
-
-//                                                                         <strong>
-//                                                                             Monthly:
-//                                                                         </strong>{" "}
-
-//                                                                         ₹
-//                                                                         {formatMoney(
-//                                                                             rentalDetails.monthlyRent
-//                                                                         )}
-
-//                                                                     </div>
-
-//                                                                     {/* -----------------------------------------
-//                                                                         SECURITY DEPOSIT
-//                                                                     ----------------------------------------- */}
-
-//                                                                     <div>
-
-//                                                                         <strong>
-//                                                                             Deposit:
-//                                                                         </strong>{" "}
-
-//                                                                         ₹
-//                                                                         {formatMoney(
-//                                                                             rentalDetails.securityDeposit
-//                                                                         )}
-
-//                                                                     </div>
-
-//                                                                     {/* -----------------------------------------
-//                                                                         MINIMUM MONTHS
-//                                                                     ----------------------------------------- */}
-
-//                                                                     <div>
-
-//                                                                         <strong>
-//                                                                             Minimum:
-//                                                                         </strong>{" "}
-
-//                                                                         {
-//                                                                             rentalDetails.minimumRentalMonths ??
-//                                                                             3
-//                                                                         }{" "}
-//                                                                         months
-
-//                                                                     </div>
-
-//                                                                     {/* -----------------------------------------
-//                                                                         GST
-//                                                                     ----------------------------------------- */}
-
-//                                                                     <div>
-
-//                                                                         <strong>
-//                                                                             GST:
-//                                                                         </strong>{" "}
-
-//                                                                         {
-//                                                                             rentalDetails.gst ??
-//                                                                             0
-//                                                                         }%
-
-//                                                                     </div>
-
-//                                                                     {/* -----------------------------------------
-//                                                                         QUANTITY
-//                                                                     ----------------------------------------- */}
-
-//                                                                     <div>
-
-//                                                                         <strong>
-//                                                                             Available:
-//                                                                         </strong>{" "}
-
-//                                                                         {
-//                                                                             rentalQuantity?.available ??
-//                                                                             0
-//                                                                         }
-
-//                                                                     </div>
-
-//                                                                     <div>
-
-//                                                                         <strong>
-//                                                                             Total:
-//                                                                         </strong>{" "}
-
-//                                                                         {
-//                                                                             rentalQuantity?.total ??
-//                                                                             0
-//                                                                         }
-
-//                                                                     </div>
-
-//                                                                     <div>
-
-//                                                                         <strong>
-//                                                                             Rented:
-//                                                                         </strong>{" "}
-
-//                                                                         {
-//                                                                             rentalQuantity?.rented ??
-//                                                                             0
-//                                                                         }
-
-//                                                                     </div>
-
-//                                                                     {/* -----------------------------------------
-//                                                                         SOFTWARE
-//                                                                     ----------------------------------------- */}
-
-//                                                                     <div>
-
-//                                                                         <strong>
-//                                                                             Software:
-//                                                                         </strong>{" "}
-
-//                                                                         {rentalDetails.basicSoftwareInstalled ===
-//                                                                         true
-//                                                                             ? "Installed"
-//                                                                             : "Not Installed"}
-
-//                                                                     </div>
-
-//                                                                     {/* -----------------------------------------
-//                                                                         INCLUDED ITEMS
-//                                                                     ----------------------------------------- */}
-
-//                                                                     {Array.isArray(
-//                                                                         rentalDetails.includedItems
-//                                                                     ) &&
-//                                                                     rentalDetails.includedItems.length >
-//                                                                     0 ? (
-
-//                                                                         <div>
-
-//                                                                             <strong>
-//                                                                                 Included:
-//                                                                             </strong>{" "}
-
-//                                                                             {
-//                                                                                 rentalDetails.includedItems.join(
-//                                                                                     ", "
-//                                                                                 )
-//                                                                             }
-
-//                                                                         </div>
-
-//                                                                     ) : null}
-
-//                                                                 </div>
-
-//                                                             ) : (
-
-//                                                                 <span className="rental-not-configured1">
-//                                                                     Rental Not Configured
-//                                                                 </span>
-
-//                                                             )
-
-//                                                         ) : (
-
-//                                                             <span className="not-applicable1">
-//                                                                 N/A
-//                                                             </span>
-
-//                                                         )}
-
-//                                                     </td>
-
-//                                                     {/* =================================================
-//                                                         PURCHASE PRICE
-//                                                     ================================================= */}
-
-//                                                     <td>
-
-//                                                         ₹{" "}
-
-//                                                         {
-//                                                             formatMoney(
-//                                                                 product.pricing
-//                                                                     ?.purchasePrice
-//                                                             )
-//                                                         }
-
-//                                                     </td>
-
-//                                                     {/* =================================================
-//                                                         RETAIL PRICE (PERSONAL CUSTOMERS)
-//                                                     ================================================= */}
-
-//                                                     <td>
-
-//                                                         ₹{" "}
-
-//                                                         {
-//                                                             formatMoney(
-//                                                                 product.pricing
-//                                                                     ?.retailPrice
-//                                                             )
-//                                                         }
-
-//                                                     </td>
-
-//                                                     {/* =================================================
-//                                                         WHOLESALE PRICE (BUSINESS CUSTOMERS)
-//                                                     ================================================= */}
-
-//                                                     <td>
-
-//                                                         {product.pricing
-//                                                             ?.wholesalePrice !==
-//                                                             null &&
-//                                                         product.pricing
-//                                                             ?.wholesalePrice !==
-//                                                             undefined ? (
-
-//                                                             <>
-//                                                                 ₹{" "}
-
-//                                                                 {
-//                                                                     formatMoney(
-//                                                                         product.pricing
-//                                                                             .wholesalePrice
-//                                                                     )
-//                                                                 }
-//                                                             </>
-
-//                                                         ) : (
-
-//                                                             <span className="not-applicable1">
-//                                                                 Not set
-//                                                             </span>
-
-//                                                         )}
-
-//                                                     </td>
-
-//                                                     {/* =================================================
-//                                                         MRP
-//                                                     ================================================= */}
-
-//                                                     <td>
-
-//                                                         ₹{" "}
-
-//                                                         {
-//                                                             formatMoney(
-//                                                                 product.pricing
-//                                                                     ?.mrp
-//                                                             )
-//                                                         }
-
-//                                                     </td>
-
-//                                                     {/* =================================================
-//                                                         DISCOUNT
-//                                                     ================================================= */}
-
-//                                                     <td>
-
-//                                                         {
-//                                                             product.pricing
-//                                                                 ?.discount ??
-//                                                             0
-//                                                         }%
-
-//                                                     </td>
-
-//                                                     {/* =================================================
-//                                                         GST
-//                                                     ================================================= */}
-
-//                                                     <td>
-
-//                                                         {
-//                                                             product.pricing
-//                                                                 ?.gst ??
-//                                                             0
-//                                                         }%
-
-//                                                     </td>
-
-//                                                     {/* =================================================
-//                                                         STOCK
-//                                                     ================================================= */}
-
-//                                                     <td>
-
-//                                                         {
-//                                                             product.inventory
-//                                                                 ?.currentStock ??
-//                                                             product.stock ??
-//                                                             0
-//                                                         }
-
-//                                                     </td>
-
-//                                                     {/* =================================================
-//                                                         STATUS
-//                                                     ================================================= */}
-
-//                                                     <td>
-
-//                                                         {product.status ===
-//                                                         "ACTIVE" ? (
-
-//                                                             <span className="active-status">
-//                                                                 Active
-//                                                             </span>
-
-//                                                         ) : (
-
-//                                                             <span className="inactive-status">
-//                                                                 Inactive
-//                                                             </span>
-
-//                                                         )}
-
-//                                                     </td>
-
-//                                                     {/* =================================================
-//                                                         ACTIONS
-//                                                     ================================================= */}
-
-//                                                     <td>
-
-//                                                         <button
-//                                                             type="button"
-//                                                             className="delete-btn1"
-//                                                             onClick={() =>
-//                                                                 handleDelete(
-//                                                                     product._id ||
-//                                                                     product.id
-//                                                                 )
-//                                                             }
-//                                                         >
-//                                                             Delete
-//                                                         </button>
-
-//                                                     </td>
-
-//                                                 </tr>
-
-//                                             );
-//                                         }
-//                                     )
-
-//                                 ) : (
-
-//                                     <tr>
-
-//                                         <td
-//                                             colSpan="18"
-//                                             className="no-products1"
-//                                         >
-//                                             No Products Found
-//                                         </td>
-
-//                                     </tr>
-
-//                                 )}
-
-//                             </tbody>
-
-//                         </table>
-
-//                     </div>
-
-//                     {/* =================================================
-//                         PAGINATION
-//                     ================================================= */}
-
-//                     {totalPages > 1 && (
-
-//                         <div className="pagination1">
-
-//                             <button
-//                                 type="button"
-//                                 disabled={
-//                                     currentPage === 1
-//                                 }
-//                                 onClick={() =>
-//                                     setCurrentPage(
-//                                         currentPage - 1
-//                                     )
-//                                 }
-//                             >
-//                                 Previous
-//                             </button>
-
-//                             {[...Array(totalPages)].map(
-//                                 (_, index) => (
-
-//                                     <button
-//                                         type="button"
-//                                         key={index}
-//                                         className={
-//                                             currentPage ===
-//                                             index + 1
-//                                                 ? "active-page"
-//                                                 : ""
-//                                         }
-//                                         onClick={() =>
-//                                             setCurrentPage(
-//                                                 index + 1
-//                                             )
-//                                         }
-//                                     >
-//                                         {
-//                                             index + 1
-//                                         }
-//                                     </button>
-
-//                                 )
-//                             )}
-
-//                             <button
-//                                 type="button"
-//                                 disabled={
-//                                     currentPage ===
-//                                     totalPages
-//                                 }
-//                                 onClick={() =>
-//                                     setCurrentPage(
-//                                         currentPage + 1
-//                                     )
-//                                 }
-//                             >
-//                                 Next
-//                             </button>
-
-//                         </div>
-
-//                     )}
-
-//                 </>
-
-//             )}
-
-//         </div>
-//     );
-// };
-
-// export default ProductList;
-
-
-
 import React, {
   useEffect,
   useState,
   useCallback,
+  useMemo,
   useRef,
 } from "react";
 
@@ -2767,9 +12,11 @@ import {
   getProducts,
   deleteProduct,
   searchProducts,
-updateProduct,
-
+  updateProduct,
 } from "../../../../services/productService";
+
+import { getBrands } from "../../../../services/brandService";
+import { getCategories } from "../../../../services/categoryService";
 
 import axios from "axios";
 import { toast } from "react-toastify";
@@ -2948,8 +195,156 @@ const createEditForm = (product) => {
   };
 };
 
+/* ==========================================================
+   FILTER / SORT HELPERS
+========================================================== */
+
+const SORT_OPTIONS = [
+  { value: "DEFAULT", label: "Default order" },
+  { value: "NAME_ASC", label: "Name: A → Z" },
+  { value: "NAME_DESC", label: "Name: Z → A" },
+  { value: "NEWEST", label: "Date: Newest first" },
+  { value: "OLDEST", label: "Date: Oldest first" },
+  { value: "RETAIL_ASC", label: "Retail price: Low → High" },
+  { value: "RETAIL_DESC", label: "Retail price: High → Low" },
+  { value: "WHOLESALE_ASC", label: "Wholesale price: Low → High" },
+  { value: "WHOLESALE_DESC", label: "Wholesale price: High → Low" },
+  { value: "STOCK_ASC", label: "Stock: Low → High" },
+  { value: "STOCK_DESC", label: "Stock: High → Low" },
+];
+
+const PRICE_TYPES = [
+  { value: "retailPrice", label: "Retail Price" },
+  { value: "wholesalePrice", label: "Wholesale Price" },
+  { value: "purchasePrice", label: "Purchase Price" },
+  { value: "mrp", label: "MRP" },
+];
+
+// Category / subcategory / brand can be a populated object or just an id
+const refId = (value) =>
+  value && typeof value === "object"
+    ? String(value._id || value.id || "")
+    : String(value || "");
+
+const refName = (value) =>
+  value && typeof value === "object"
+    ? String(value.name || value.title || "")
+    : "";
+
+const getStock = (product) =>
+  numberValue(
+    product?.inventory?.currentStock ?? product?.stock,
+    0
+  );
+
+const getStockStatus = (stock) => {
+  if (stock <= 0) return "OUT";
+  if (stock <= 5) return "LOW";
+  return "IN";
+};
+
+const getProductName = (product) =>
+  String(product?.name || "").toLowerCase();
+
+const getPriceValue = (product, field) => {
+  const value = product?.pricing?.[field];
+
+  return value === null || value === undefined || value === ""
+    ? null
+    : Number(value);
+};
+
+const getCreatedTime = (product) =>
+  new Date(product?.createdAt || 0).getTime();
+
+// Unique { id, name } options from a list of products
+const buildOptions = (list, key) => {
+  const map = new Map();
+
+  list.forEach((product) => {
+    const value = product?.[key];
+    const id = refId(value);
+    const name = refName(value);
+
+    if (id && name && !map.has(id)) {
+      map.set(id, name);
+    }
+  });
+
+  return Array.from(map, ([id, name]) => ({ id, name })).sort(
+    (a, b) => a.name.localeCompare(b.name)
+  );
+};
+
+// Brands / categories come back in different shapes, so look in the usual places
+const unwrapNamedList = (response, key) =>
+  [
+    response?.data?.[key],
+    response?.data?.data?.[key],
+    response?.data?.data,
+    response?.data,
+    response?.[key],
+    response,
+  ].find(Array.isArray) || [];
+
+// { id, name } options from a brand / category API list
+const toOptions = (list) =>
+  list
+    .map((entry) => ({
+      id: String(entry?._id || entry?.id || ""),
+      name: String(entry?.name || entry?.title || ""),
+    }))
+    .filter((entry) => entry.id && entry.name)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+// Name for a category / subcategory / brand that is either a populated
+// object or just an id (the id is looked up in the API lists)
+const displayName = (value, nameById) => {
+  if (value && typeof value === "object") {
+    return getObjectName(value);
+  }
+
+  if (!value) return "N/A";
+
+  return nameById[String(value)] || String(value);
+};
+
+const sortProducts = (list, sortBy) => {
+  if (sortBy === "DEFAULT") return list;
+
+  const comparators = {
+    NAME_ASC: (a, b) =>
+      getProductName(a).localeCompare(getProductName(b)),
+    NAME_DESC: (a, b) =>
+      getProductName(b).localeCompare(getProductName(a)),
+    NEWEST: (a, b) => getCreatedTime(b) - getCreatedTime(a),
+    OLDEST: (a, b) => getCreatedTime(a) - getCreatedTime(b),
+    RETAIL_ASC: (a, b) =>
+      numberValue(a.pricing?.retailPrice) -
+      numberValue(b.pricing?.retailPrice),
+    RETAIL_DESC: (a, b) =>
+      numberValue(b.pricing?.retailPrice) -
+      numberValue(a.pricing?.retailPrice),
+    WHOLESALE_ASC: (a, b) =>
+      numberValue(a.pricing?.wholesalePrice) -
+      numberValue(b.pricing?.wholesalePrice),
+    WHOLESALE_DESC: (a, b) =>
+      numberValue(b.pricing?.wholesalePrice) -
+      numberValue(a.pricing?.wholesalePrice),
+    STOCK_ASC: (a, b) => getStock(a) - getStock(b),
+    STOCK_DESC: (a, b) => getStock(b) - getStock(a),
+  };
+
+  const compare = comparators[sortBy];
+
+  return compare ? [...list].sort(compare) : list;
+};
+
 const ProductList = () => {
   const [products, setProducts] = useState([]);
+  const [allProducts, setAllProducts] = useState([]);
+  const [brands, setBrands] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -2958,6 +353,22 @@ const ProductList = () => {
   const [editingProduct, setEditingProduct] = useState(null);
   const [editForm, setEditForm] = useState(null);
   const [saving, setSaving] = useState(false);
+
+  // Filter / sort state
+  const [typeFilter, setTypeFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [categoryFilter, setCategoryFilter] = useState("ALL");
+  const [brandFilter, setBrandFilter] = useState("ALL");
+  const [subcategoryFilter, setSubcategoryFilter] = useState("ALL");
+  const [stockFilter, setStockFilter] = useState("ALL");
+  const [rentalFilter, setRentalFilter] = useState("ALL");
+  const [priceType, setPriceType] = useState("retailPrice");
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [sortBy, setSortBy] = useState("DEFAULT");
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
 
   const itemsPerPage = 10;
   const requestIdRef = useRef(0);
@@ -2978,7 +389,15 @@ const ProductList = () => {
 
       if (requestId !== requestIdRef.current) return;
 
-      setProducts(extractProducts(res));
+      const list = extractProducts(res);
+
+      setProducts(list);
+
+      // Keep the full list so the filter dropdowns don't shrink while searching
+      if (!keyword.trim()) {
+        setAllProducts(list);
+      }
+
       setCurrentPage(1);
     }
      catch (error) {
@@ -3007,12 +426,286 @@ const ProductList = () => {
     };
   }, [loadProducts]);
 
+  // ==========================================
+  // LOAD BRANDS + CATEGORIES (for the filter dropdowns)
+  // ==========================================
+
+  const loadBrands = useCallback(async () => {
+    try {
+      const response = await getBrands();
+
+      setBrands(unwrapNamedList(response, "brands"));
+    } catch (error) {
+      setBrands([]);
+      console.error("Brands load error:", error);
+    }
+  }, []);
+
+  const loadCategories = useCallback(async () => {
+    try {
+      const response = await getCategories();
+
+      setCategories(unwrapNamedList(response, "categories"));
+    } catch (error) {
+      setCategories([]);
+      console.error("Categories load error:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadBrands();
+    loadCategories();
+  }, [loadBrands, loadCategories]);
+
   const handleSearch = (e) => {
     const keyword = e.target.value;
 
     setSearch(keyword);
     setCurrentPage(1);
     loadProducts(keyword);
+  };
+
+  // ==========================================
+  // FILTER OPTIONS (built from the loaded data)
+  // ==========================================
+
+  const optionSource = allProducts.length ? allProducts : products;
+
+  // The categories API returns categories and subcategories together;
+  // a subcategory is the one that has a parentCategory.
+  const categoryOptions = useMemo(() => {
+    const fromApi = toOptions(
+      categories.filter((entry) => !refId(entry.parentCategory))
+    );
+
+    return fromApi.length
+      ? fromApi
+      : buildOptions(optionSource, "category");
+  }, [categories, optionSource]);
+
+  const subcategoryOptions = useMemo(() => {
+    const fromApi = toOptions(
+      categories.filter((entry) => {
+        const parentId = refId(entry.parentCategory);
+
+        if (!parentId) return false;
+
+        return (
+          categoryFilter === "ALL" || parentId === categoryFilter
+        );
+      })
+    );
+
+    return fromApi.length
+      ? fromApi
+      : buildOptions(optionSource, "subcategory");
+  }, [categories, categoryFilter, optionSource]);
+
+  const brandOptions = useMemo(() => {
+    const fromApi = toOptions(brands);
+
+    return fromApi.length
+      ? fromApi
+      : buildOptions(optionSource, "brand");
+  }, [brands, optionSource]);
+
+  // id -> name, used when a product only carries the id
+  const categoryNameById = useMemo(
+    () =>
+      Object.fromEntries(
+        toOptions(categories).map((option) => [option.id, option.name])
+      ),
+    [categories]
+  );
+
+  const brandNameById = useMemo(
+    () =>
+      Object.fromEntries(
+        toOptions(brands).map((option) => [option.id, option.name])
+      ),
+    [brands]
+  );
+
+  // ==========================================
+  // FILTER + SORT
+  // ==========================================
+
+  const filteredProducts = useMemo(() => {
+    const from = dateFrom
+      ? new Date(`${dateFrom}T00:00:00`).getTime()
+      : null;
+
+    const to = dateTo
+      ? new Date(`${dateTo}T23:59:59.999`).getTime()
+      : null;
+
+    const priceRangeActive = minPrice !== "" || maxPrice !== "";
+
+    const result = products.filter((product) => {
+      if (
+        typeFilter !== "ALL" &&
+        getProductType(product) !== typeFilter
+      ) {
+        return false;
+      }
+
+      if (
+        statusFilter !== "ALL" &&
+        String(product.status || "").toUpperCase() !== statusFilter
+      ) {
+        return false;
+      }
+
+      if (
+        categoryFilter !== "ALL" &&
+        refId(product.category) !== categoryFilter
+      ) {
+        return false;
+      }
+
+      if (
+        brandFilter !== "ALL" &&
+        refId(product.brand) !== brandFilter
+      ) {
+        return false;
+      }
+
+      if (
+        subcategoryFilter !== "ALL" &&
+        refId(product.subcategory) !== subcategoryFilter
+      ) {
+        return false;
+      }
+
+      if (
+        stockFilter !== "ALL" &&
+        getStockStatus(getStock(product)) !== stockFilter
+      ) {
+        return false;
+      }
+
+      // Rental availability only applies to rental products
+      if (rentalFilter !== "ALL") {
+        if (getProductType(product) !== "RENTAL") return false;
+
+        if (getRentalStatus(product) !== rentalFilter) return false;
+      }
+
+      if (priceRangeActive) {
+        const price = getPriceValue(product, priceType);
+
+        // products with no price set are left out while a range is active
+        if (price === null || !Number.isFinite(price)) {
+          return false;
+        }
+
+        if (minPrice !== "" && price < Number(minPrice)) {
+          return false;
+        }
+
+        if (maxPrice !== "" && price > Number(maxPrice)) {
+          return false;
+        }
+      }
+
+      if (from !== null || to !== null) {
+        if (!product.createdAt) return false;
+
+        const time = getCreatedTime(product);
+
+        if (from !== null && time < from) return false;
+        if (to !== null && time > to) return false;
+      }
+
+      return true;
+    });
+
+    return sortProducts(result, sortBy);
+  }, [
+    products,
+    typeFilter,
+    statusFilter,
+    categoryFilter,
+    brandFilter,
+    subcategoryFilter,
+    stockFilter,
+    rentalFilter,
+    priceType,
+    minPrice,
+    maxPrice,
+    dateFrom,
+    dateTo,
+    sortBy,
+  ]);
+
+  // Go back to page 1 whenever a filter or the sort changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    typeFilter,
+    statusFilter,
+    categoryFilter,
+    brandFilter,
+    subcategoryFilter,
+    stockFilter,
+    rentalFilter,
+    priceType,
+    minPrice,
+    maxPrice,
+    dateFrom,
+    dateTo,
+    sortBy,
+  ]);
+
+  const hasActiveFilters =
+    search.trim() !== "" ||
+    typeFilter !== "ALL" ||
+    statusFilter !== "ALL" ||
+    categoryFilter !== "ALL" ||
+    brandFilter !== "ALL" ||
+    subcategoryFilter !== "ALL" ||
+    stockFilter !== "ALL" ||
+    rentalFilter !== "ALL" ||
+    priceType !== "retailPrice" ||
+    minPrice !== "" ||
+    maxPrice !== "" ||
+    dateFrom !== "" ||
+    dateTo !== "" ||
+    sortBy !== "DEFAULT";
+
+  // Number of filters currently set inside the "More filters" panel
+  const moreFiltersCount =
+    (subcategoryFilter !== "ALL" ? 1 : 0) +
+    (stockFilter !== "ALL" ? 1 : 0) +
+    (rentalFilter !== "ALL" ? 1 : 0) +
+    (priceType !== "retailPrice" ? 1 : 0) +
+    (minPrice !== "" ? 1 : 0) +
+    (maxPrice !== "" ? 1 : 0) +
+    (dateFrom !== "" ? 1 : 0) +
+    (dateTo !== "" ? 1 : 0);
+
+  const resetFilters = () => {
+    const hadSearch = search.trim() !== "";
+
+    setSearch("");
+    setTypeFilter("ALL");
+    setStatusFilter("ALL");
+    setCategoryFilter("ALL");
+    setBrandFilter("ALL");
+    setSubcategoryFilter("ALL");
+    setStockFilter("ALL");
+    setRentalFilter("ALL");
+    setPriceType("retailPrice");
+    setMinPrice("");
+    setMaxPrice("");
+    setDateFrom("");
+    setDateTo("");
+    setSortBy("DEFAULT");
+    setCurrentPage(1);
+
+    if (hadSearch) {
+      loadProducts("");
+    }
   };
 
   // ==========================================
@@ -3247,7 +940,9 @@ catch (error) {
   // PAGINATION
   // ==========================================
 
-  const totalPages = Math.ceil(products.length / itemsPerPage);
+  const totalPages = Math.ceil(
+    filteredProducts.length / itemsPerPage
+  );
 
   const safePage = Math.max(
     1,
@@ -3256,7 +951,7 @@ catch (error) {
 
   const firstIndex = (safePage - 1) * itemsPerPage;
 
-  const currentProducts = products.slice(
+  const currentProducts = filteredProducts.slice(
     firstIndex,
     firstIndex + itemsPerPage
   );
@@ -3281,6 +976,256 @@ catch (error) {
           className="search-box1"
         />
       </div>
+
+      {/* ======================================
+          FILTER BAR
+      ====================================== */}
+
+      <div className="product-filters1">
+        <div className="product-filter-group1">
+          <label htmlFor="product-filter-type">Product type</label>
+          <select
+            id="product-filter-type"
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+          >
+            <option value="ALL">All Types</option>
+            <option value="NEW">New</option>
+            <option value="REFURBISHED">Refurbished</option>
+            <option value="RENTAL">Rental</option>
+          </select>
+        </div>
+
+        <div className="product-filter-group1">
+          <label htmlFor="product-filter-status">Status</label>
+          <select
+            id="product-filter-status"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="ALL">All Status</option>
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Inactive</option>
+          </select>
+        </div>
+
+        <div className="product-filter-group1">
+          <label htmlFor="product-filter-category">Category</label>
+          <select
+            id="product-filter-category"
+            value={categoryFilter}
+            onChange={(e) => {
+              setCategoryFilter(e.target.value);
+              setSubcategoryFilter("ALL");
+            }}
+          >
+            <option value="ALL">All Categories</option>
+            {categoryOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="product-filter-group1">
+          <label htmlFor="product-filter-brand">Brand</label>
+          <select
+            id="product-filter-brand"
+            value={brandFilter}
+            onChange={(e) => setBrandFilter(e.target.value)}
+          >
+            <option value="ALL">All Brands</option>
+            {brandOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="product-filter-group1">
+          <label htmlFor="product-filter-sort">Sort by</label>
+          <select
+            id="product-filter-sort"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+          >
+            {SORT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="product-filter-actions1">
+          <button
+            type="button"
+            className={
+              showMoreFilters || moreFiltersCount > 0
+                ? "product-more-btn1 active"
+                : "product-more-btn1"
+            }
+            aria-expanded={showMoreFilters}
+            aria-controls="product-more-filters"
+            onClick={() => setShowMoreFilters((open) => !open)}
+          >
+            More filters
+            {moreFiltersCount > 0 && (
+              <span className="product-more-badge1">
+                {moreFiltersCount}
+              </span>
+            )}
+            <span aria-hidden="true">
+              {showMoreFilters ? " ▴" : " ▾"}
+            </span>
+          </button>
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              className="product-clear-btn1"
+              onClick={resetFilters}
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      </div>
+
+      {showMoreFilters && (
+        <div
+          id="product-more-filters"
+          className="product-filters1 product-more-panel1"
+        >
+          <div className="product-filter-group1">
+            <label htmlFor="product-filter-subcategory">
+              Subcategory
+            </label>
+            <select
+              id="product-filter-subcategory"
+              value={subcategoryFilter}
+              onChange={(e) =>
+                setSubcategoryFilter(e.target.value)
+              }
+            >
+              <option value="ALL">All Subcategories</option>
+              {subcategoryOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="product-filter-group1">
+            <label htmlFor="product-filter-stock">Stock</label>
+            <select
+              id="product-filter-stock"
+              value={stockFilter}
+              onChange={(e) => setStockFilter(e.target.value)}
+            >
+              <option value="ALL">All Stock</option>
+              <option value="IN">In Stock</option>
+              <option value="LOW">Low Stock</option>
+              <option value="OUT">Out Of Stock</option>
+            </select>
+          </div>
+
+          <div className="product-filter-group1">
+            <label htmlFor="product-filter-rental">
+              Rental availability
+            </label>
+            <select
+              id="product-filter-rental"
+              value={rentalFilter}
+              onChange={(e) => setRentalFilter(e.target.value)}
+            >
+              <option value="ALL">All</option>
+              <option value="AVAILABLE">Available</option>
+              <option value="UNAVAILABLE">Unavailable</option>
+              <option value="NOT_CONFIGURED">Not Configured</option>
+            </select>
+          </div>
+
+          <div className="product-filter-group1">
+            <label htmlFor="product-filter-price-type">
+              Price type
+            </label>
+            <select
+              id="product-filter-price-type"
+              value={priceType}
+              onChange={(e) => setPriceType(e.target.value)}
+            >
+              {PRICE_TYPES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="product-filter-group1">
+            <label htmlFor="product-filter-min-price">
+              Min price (₹)
+            </label>
+            <input
+              id="product-filter-min-price"
+              type="number"
+              min="0"
+              placeholder="e.g. 10000"
+              value={minPrice}
+              onChange={(e) => setMinPrice(e.target.value)}
+            />
+          </div>
+
+          <div className="product-filter-group1">
+            <label htmlFor="product-filter-max-price">
+              Max price (₹)
+            </label>
+            <input
+              id="product-filter-max-price"
+              type="number"
+              min="0"
+              placeholder="e.g. 30000"
+              value={maxPrice}
+              onChange={(e) => setMaxPrice(e.target.value)}
+            />
+          </div>
+
+          <div className="product-filter-group1">
+            <label htmlFor="product-filter-date-from">
+              Added from
+            </label>
+            <input
+              id="product-filter-date-from"
+              type="date"
+              value={dateFrom}
+              max={dateTo || undefined}
+              onChange={(e) => setDateFrom(e.target.value)}
+            />
+          </div>
+
+          <div className="product-filter-group1">
+            <label htmlFor="product-filter-date-to">Added to</label>
+            <input
+              id="product-filter-date-to"
+              type="date"
+              value={dateTo}
+              min={dateFrom || undefined}
+              onChange={(e) => setDateTo(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
+
+      {!loading && (
+        <div className="product-result-count1">
+          Showing {filteredProducts.length} of {products.length}{" "}
+          products
+        </div>
+      )}
 
       {loading ? (
         <div className="loading1">
@@ -3377,13 +1322,23 @@ catch (error) {
                           </span>
                         </td>
 
-                        <td>{getObjectName(product.category)}</td>
-
                         <td>
-                          {getObjectName(product.subcategory)}
+                          {displayName(
+                            product.category,
+                            categoryNameById
+                          )}
                         </td>
 
-                        <td>{getObjectName(product.brand)}</td>
+                        <td>
+                          {displayName(
+                            product.subcategory,
+                            categoryNameById
+                          )}
+                        </td>
+
+                        <td>
+                          {displayName(product.brand, brandNameById)}
+                        </td>
 
                         <td>
                           {productType === "REFURBISHED" ? (
